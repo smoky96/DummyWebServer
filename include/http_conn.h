@@ -100,6 +100,8 @@ class http_conn {
   bool __add_content_length(int content_length);
   bool __add_linger();
   bool __add_blank_line();
+  /* 调整 __iv 内容 */
+  void __adjust_iv();
 };
 
 #endif  //!__HTTP_CONN__H__

@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
   /* 忽略 SIGPIPE 信号 */
   addsig(SIGPIPE, SIG_IGN);
   /* 创建线程 */
-  unique_ptr<threadpool<http_conn>> pool(new threadpool<http_conn>(1));
+  unique_ptr<threadpool<http_conn>> pool(new threadpool<http_conn>(8));
 
   /* 为每个可能的客户端连接分配一个 http_conn 对象 */
   vector<http_conn> users(MAX_FD);

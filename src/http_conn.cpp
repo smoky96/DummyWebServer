@@ -281,6 +281,18 @@ void http_conn::__unmap() {
   }
 }
 
+/* 每次调用 writev 都需要调整 __iv */
+void http_conn::__adjust_iv() {
+  if (__bytes_have_sent >= __write_idx) {
+    __iv[0].iov_len = 0;
+    __iv[1].iov_base = __file_addr + (__bytes_have_sent - __write_idx);
+    __iv[1].iov_len = __bytes_to_send;
+  } else {
+    __iv[0].iov_base = __write_buf + __bytes_have_sent;
+    __iv[0].iov_len = __write_idx - __bytes_have_sent;
+  }
+}
+
 /* 写 HTTP 响应 */
 bool http_conn::write() {
   int tmp = 0;
@@ -291,19 +303,10 @@ bool http_conn::write() {
     return true;
   }
   while (1) {
-    tmp = Writev(__sockfd, &__iv[0], __iv_cnt);
+    tmp = Writev(__sockfd, __iv, __iv_cnt);
     if (tmp < 0) {
       if (errno == EAGAIN) {
-        if (__bytes_have_sent >= __write_idx) {
-          __iv[0].iov_len = 0;
-          __iv[1].iov_base = __file_addr + (__bytes_have_sent - __write_idx);
-          __iv[1].iov_len = __bytes_to_send;
-        } else {
-          __iv[0].iov_base = __write_buf + __bytes_have_sent;
-          __iv[0].iov_len = __write_idx - __bytes_have_sent;
-        }
-        /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法再接收客户端请求
-         */
+        /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
         modfd(epollfd, __sockfd, EPOLLOUT);
         return true;
       }
@@ -313,6 +316,8 @@ bool http_conn::write() {
     printf("---debug---sent %d bytes\n", tmp);
     __bytes_to_send -= tmp;
     __bytes_have_sent += tmp;
+    __adjust_iv();
+
     if (__bytes_to_send <= 0) {
       __unmap();
       /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
@@ -326,6 +331,7 @@ bool http_conn::write() {
       }
     }
   }
+  return false;
 }
 
 /* 往写缓冲区中写入待发送的数据 */
