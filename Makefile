@@ -8,36 +8,49 @@ LIB		:= lib
 
 LIBRARIES	:= -lrt -pthread
 
-ifeq ($(OS),Windows_NT)
-EXECUTABLE	:= main.exe
+EXECUTABLE1	:= server
+EXECUTABLE2	:= cgi
+EXECUTABLE3	:= stress
 SOURCEDIRS	:= $(SRC)
-INCLUDEDIRS	:= $(INCLUDE)
-LIBDIRS		:= $(LIB)
-else
-EXECUTABLE	:= main
-SOURCEDIRS	:= $(shell find $(SRC) -type d)
+SOURCEDIRS1	:= $(shell find $(SRC)/server -type d)
+SOURCEDIRS2	:= $(shell find $(SRC)/cgi -type d)
+SOURCEDIRS3	:= $(shell find $(SRC)/stress -type d)
 INCLUDEDIRS	:= $(shell find $(INCLUDE) -type d)
 LIBDIRS		:= $(shell find $(LIB) -type d)
-endif
 
 CINCLUDES	:= $(patsubst %,-I%, $(INCLUDEDIRS:%/=%))
 CLIBS		:= $(patsubst %,-L%, $(LIBDIRS:%/=%))
 
 SOURCES		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS)))
-OBJECTS		:= $(SOURCES:.cpp=.o)
+SOURCES1		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS1)))
+SOURCES2		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS2)))
+SOURCES3		:= $(wildcard $(patsubst %,%/*.cpp, $(SOURCEDIRS3)))
+OBJECTS1		:= $(SOURCES:.cpp=.o) $(SOURCES1:.cpp=.o)
+OBJECTS2		:= $(SOURCES:.cpp=.o) $(SOURCES2:.cpp=.o)
+OBJECTS3		:= $(SOURCES:.cpp=.o) $(SOURCES3:.cpp=.o)
 
-all: $(BIN)/$(EXECUTABLE)
+all: $(BIN)/$(EXECUTABLE1) $(BIN)/$(EXECUTABLE2) $(BIN)/$(EXECUTABLE3)
+.PHONY: all
 
 .PHONY: clean
 clean:
-	-$(RM) $(BIN)/$(EXECUTABLE)
-	-$(RM) $(OBJECTS)
+	-$(RM) $(BIN)/$(EXECUTABLE1)
+	-$(RM) $(BIN)/$(EXECUTABLE2)
+	-$(RM) $(BIN)/$(EXECUTABLE3)
+	-$(RM) $(OBJECTS1)
+	-$(RM) $(OBJECTS2)
 
 
 run: all
 	./$(BIN)/$(EXECUTABLE)
 
-$(BIN)/$(EXECUTABLE): $(OBJECTS)
+$(BIN)/$(EXECUTABLE1): $(OBJECTS1)
+	$(CC) $(CXXFLAGS) $(CLIBS) $^ -o $@ $(LIBRARIES)
+
+$(BIN)/$(EXECUTABLE2): $(OBJECTS2)
+	$(CC) $(CXXFLAGS) $(CLIBS) $^ -o $@ $(LIBRARIES)
+
+$(BIN)/$(EXECUTABLE3): $(OBJECTS3)
 	$(CC) $(CXXFLAGS) $(CLIBS) $^ -o $@ $(LIBRARIES)
 
 %.o: %.cpp

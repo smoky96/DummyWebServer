@@ -56,6 +56,7 @@ int Open(const char* pathname, int flags);
 
 int Close(int fd);
 
+/* 出错返回 -1 */
 int Stat(const char* pathname, struct stat* statbuf);
 
 int Shm_open(const char* name, int oflag, mode_t mode);

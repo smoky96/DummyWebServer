@@ -131,6 +131,7 @@ int Close(int fd) {
   return 0;
 }
 
+/* 出错返回 -1 */
 int Stat(const char* pathname, struct stat* statbuf) {
   if (stat(pathname, statbuf) < 0) {
     PRINT_ERRNO(stat);

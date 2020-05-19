@@ -193,7 +193,6 @@ void processpool<T>::__run_child() {
         }
       } else if (sockfd == sig_sktpipefd[0] &&
                  (events[i].events & EPOLLIN)) {  // 接收到信号
-        int sig;
         char signals[1024];
         ret = Recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
         if (ret <= 0) continue;
@@ -259,7 +258,6 @@ void processpool<T>::__run_parent() {
         printf("send request to child %d\n", i);
       } else if (sockfd == sig_sktpipefd[0] &&
                  (events[i].events & EPOLLIN)) {  // 接收信号
-        int sig;
         char signals[1024];
         ret = Recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
         if (ret <= 0) continue;

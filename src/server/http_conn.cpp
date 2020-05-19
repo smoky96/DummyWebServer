@@ -296,7 +296,6 @@ void http_conn::__adjust_iv() {
 /* 写 HTTP 响应 */
 bool http_conn::write() {
   int tmp = 0;
-  printf("---debug---%d bytes to send\n", __bytes_to_send);
   if (__bytes_to_send == 0) {
     modfd(epollfd, __sockfd, EPOLLIN);
     __init();
@@ -313,7 +312,6 @@ bool http_conn::write() {
       __unmap();
       return false;
     }
-    printf("---debug---sent %d bytes\n", tmp);
     __bytes_to_send -= tmp;
     __bytes_have_sent += tmp;
     __adjust_iv();
