@@ -1,5 +1,7 @@
 #include "http_conn.h"
 
+#include "urlcode.h"
+
 /* 定义 HTTP 响应的状态信息 */
 const char *ok_200_title = "OK";
 
@@ -25,6 +27,7 @@ const char *error_500_form =
 
 /* 网站根目录 */
 const char *doc_root = "/home/dong/blog/";
+const char *default_page = "/index.html";
 
 int http_conn::user_cnt = 0;
 int http_conn::epollfd = -1;
@@ -254,11 +257,24 @@ http_conn::HTTP_CODE http_conn::__process_read() {
 
 /* 得到完整 HTTP 请求后，分析目标文件属性，将其映射到内存地址 __file_addr 处 */
 http_conn::HTTP_CODE http_conn::__do_request() {
+  char buf[FILENAME_LEN];
+  /* url 解码 */
+  if (url_decode(__url, buf, FILENAME_LEN) < 0) {
+    return BAD_REQUEST;
+  }
   strcpy(__real_file, doc_root);
   int len = strlen(doc_root);
-  strncpy(__real_file + len, __url, FILENAME_LEN - len - 1);
+  strncpy(__real_file + len, buf, FILENAME_LEN - len - 1);
   if (Stat(__real_file, &__file_stat) < 0) {
     return NO_RESOURCE;
+  }
+  /* 若请求未指定文件，则将目录下的 default_page 文件返回给客户端 */
+  if (S_ISDIR(__file_stat.st_mode)) {
+    len = strlen(__real_file);
+    strncpy(__real_file + len, default_page, FILENAME_LEN - len - 1);
+    if (Stat(__real_file, &__file_stat) < 0) {
+      return NO_RESOURCE;
+    }
   }
   if (!(__file_stat.st_mode & S_IROTH)) {
     return FORBIDDEN_REQUEST;
