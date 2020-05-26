@@ -2,7 +2,7 @@
 
 /* 每个客户连接不停地向服务器发送这个请求 */
 static const char* request =
-    "GET http://192.168.226.131/2020/0217-151604/index.html "
+    "GET http://192.168.226.131/ "
     "HTTP/1.1\r\nConnection:keep-alive\r\n\r\n";
 
 /* 向服务器写入 len 字节的数据 */
@@ -24,9 +24,9 @@ bool write_nbytes(int sockfd, const char* buffer, int len) {
 bool read_once(int sockfd, char* buffer, int len) {
   int bytes_read = 0;
   memset(buffer, '\0', len);
-  bytes_read = Recv(sockfd, buffer, len, 0);
-  if (bytes_read == -1 || bytes_read == 0) return false;
-  printf("read in %d bytes from socket %d\n", bytes_read, sockfd);
+  while ((bytes_read = Recv(sockfd, buffer, len, 0)) > 0)
+    printf("read in %d bytes from socket %d\n", bytes_read, sockfd);
+  if (bytes_read == -1 && errno != EAGAIN) return false;
   return true;
 }
 
