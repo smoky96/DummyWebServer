@@ -327,7 +327,7 @@ void addsig(int signum, void (*handler)(int), bool restart) {
 
 /* 发送错误信息 */
 void SendError(int connfd, const char* info) {
-  printf("%s", info);
+  printf("%s\n", info);
   Send(connfd, info, strlen(info), 0);
   Close(connfd);
 }

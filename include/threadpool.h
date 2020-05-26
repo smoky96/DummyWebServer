@@ -85,14 +85,14 @@ void threadpool<T>::__run() {
   while (!__stop) {
     __jobs_stat.wait();
     if (!__jobs.empty()) {
-      T* request;
+      T* request = nullptr;
       __jobs_locker.lock();
       if (!__jobs.empty()) {
         request = __jobs.front();
         __jobs.pop_front();
       }
       __jobs_locker.unlock();
-      request->process();
+      if (request) request->process();
     }
   }
 }
