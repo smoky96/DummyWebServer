@@ -98,20 +98,23 @@ int Pthread_detach(pthread_t thread);
 /* 设置非阻塞 io */
 int setnonblocking(int fd);
 
-/* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件，采用边沿触发模式 */
-void addfd(int epollfd, int fd);
-
-/* one_shot: 是否采用 one-shot 行为  */
-void addfd(int epollfd, int fd, bool one_shot);
+/* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件
+ * one_shot: 是否采用 one-shot 行为，默认 false
+ * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+void addfd(int epollfd, int fd, bool one_shot = false, int triger_mode = 0);
 
 /* 重设 one-shot，
- * ev 为附加监听事件，监听事件为 ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP */
-void modfd(int epollfd, int fd, int ev);
+ * ev 为附加监听事件，最终监听事件为 ev | EPOLLONESHOT | EPOLLRDHUP
+ * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+void modfd(int epollfd, int fd, int ev, int triger_mode = 0);
 
 /* 从 epoll 事件表中删除 fd */
 void removefd(int epollfd, int fd);
 
 /* 设置捕获信号 */
 void addsig(int signum, void (*handler)(int), bool restart = true);
+
+/* 发送错误信息 */
+void SendError(int connfd, const char* info);
 
 #endif  //!__CONMMON__H__

@@ -281,33 +281,31 @@ int setnonblocking(int fd) {
   return old_opt;
 }
 
-/* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件，采用边沿触发模式 */
-void addfd(int epollfd, int fd) {
+/* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件
+ * one_shot: 是否采用 one-shot 行为，默认 false
+ * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+void addfd(int epollfd, int fd, bool one_shot, int triger_mode) {
   epoll_event event;
   event.data.fd = fd;
-  event.events = EPOLLIN | EPOLLET;
-  Epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-  setnonblocking(fd);
-}
+  event.events = EPOLLIN | EPOLLRDHUP;
 
-/* one_shot: 是否采用 one-shot 行为  */
-void addfd(int epollfd, int fd, bool one_shot) {
-  epoll_event event;
-  event.data.fd = fd;
-  event.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-  if (one_shot) {
-    event.events |= EPOLLONESHOT;
-  }
+  if (triger_mode == 0) event.events |= EPOLLET;
+  if (one_shot) event.events |= EPOLLONESHOT;
+
   Epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
   setnonblocking(fd);
 }
 
 /* 重设 one-shot，
- * ev 为附加监听事件，监听事件为 ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP */
-void modfd(int epollfd, int fd, int ev) {
+ * ev 为附加监听事件，最终监听事件为 ev | EPOLLONESHOT | EPOLLRDHUP
+ * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+void modfd(int epollfd, int fd, int ev, int triger_mode) {
   epoll_event event;
   event.data.fd = fd;
-  event.events = ev | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
+  event.events = ev | EPOLLONESHOT | EPOLLRDHUP;
+
+  if (triger_mode == 0) event.events |= EPOLLET;
+
   Epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
 
@@ -325,4 +323,11 @@ void addsig(int signum, void (*handler)(int), bool restart) {
   if (restart) sa.sa_flags |= SA_RESTART;
   Sigfillset(&sa.sa_mask);
   Sigaction(signum, &sa, NULL);
+}
+
+/* 发送错误信息 */
+void SendError(int connfd, const char* info) {
+  printf("%s", info);
+  Send(connfd, info, strlen(info), 0);
+  Close(connfd);
 }
