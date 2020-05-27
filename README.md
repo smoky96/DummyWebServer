@@ -69,11 +69,18 @@ $ make
   * 完成 CGI 程序
   * 完成压力测试程序
 
+## To-Do
+
+- [ ] 加入 POST 方法
+- [ ] 提供 epoll 的 ET 与 LT 两种触发模式的选择
+- [ ] 提供 Reactor 与 Proactor 两种并发模型的选择
+- [ ] 加入数据库支持
+
 ## Authors 关于作者
 
 * [GuoDong](https://guodong.plus)
 
-## Acknowledgement
+## Acknowledgement 致谢
 
 * 主要参考游双所著的《Linux 高性能服务器编程》
 * 同时参考了 [@qinguoyi](https://github.com/qinguoyi/TinyWebServer) 所编写的 TinyWebServer 感谢大佬！
