@@ -39,6 +39,7 @@ clean:
 	-$(RM) $(BIN)/$(EXECUTABLE3)
 	-$(RM) $(OBJECTS1)
 	-$(RM) $(OBJECTS2)
+	-$(RM) $(OBJECTS3)
 
 
 run: all
