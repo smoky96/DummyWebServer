@@ -47,7 +47,7 @@ void start_conn(int epollfd, int* num, const char* ip, int port) {
     event.data.fd = sockfd[i];
     event.events = EPOLLOUT | EPOLLET | EPOLLERR;
     Epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd[i], &event);
-    setnonblocking(sockfd[i]);
+    SetNonBlocking(sockfd[i]);
   }
 }
 
@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
       int sockfd = events[i].data.fd;
       if (events[i].events & EPOLLIN) {
         if (!read_once(sockfd, buffer, 2048)) {
-          removefd(epollfd, sockfd);
+          RemoveFd(epollfd, sockfd);
           --num;
           printf("have %d socket left\n", num);
           continue;
@@ -83,7 +83,7 @@ int main(int argc, char** argv) {
         Epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event);
       } else if (events[i].events & EPOLLOUT) {
         if (!write_nbytes(sockfd, request, strlen(request))) {
-          removefd(epollfd, sockfd);
+          RemoveFd(epollfd, sockfd);
           --num;
           printf("have %d socket left\n", num);
           continue;
@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
         event.events = EPOLLIN | EPOLLET | EPOLLERR;
         Epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event);
       } else {
-        removefd(epollfd, sockfd);
+        RemoveFd(epollfd, sockfd);
       }
     }
   }

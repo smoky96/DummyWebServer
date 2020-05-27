@@ -20,7 +20,7 @@ class process {
 };
 
 /* 对 processpool 中的 __instance 上锁 */
-static locker __instance_locker = locker();
+static Locker __instance_locker = Locker();
 
 /** 进程池类模板
  * T: 处理逻辑任务的类
@@ -55,7 +55,7 @@ class processpool {
     /* 这里只读，不用加锁，如果不为空直接返回，减少加锁开销 */
     if (tmp == nullptr) {
       /* 接下来要写了，所以需要锁上 */
-      __instance_locker.lock();
+      __instance_locker.Lock();
       tmp = __instance.load(std::memory_order_relaxed);
       if (tmp == nullptr) {
         tmp = new processpool(listenfd, process_number);
@@ -65,17 +65,17 @@ class processpool {
          * __instance 虽然不为空，但其还没有构造完成的情况 */
         __instance.store(tmp, std::memory_order_relaxed);
       }
-      __instance_locker.unlock();
+      __instance_locker.Unlcok();
     }
     return tmp;
   }
 
   ~processpool() {
     if (__instance != nullptr) {
-      __instance_locker.lock();
+      __instance_locker.Lock();
       // printf("destructor in child %d\n", getpid());
       if (__instance != nullptr) delete __instance;
-      __instance_locker.unlock();
+      __instance_locker.Unlcok();
     }
   }
 
@@ -138,13 +138,13 @@ template <typename T>
 void processpool<T>::__setup() {
   __epfd = Epoll_create(5);
   Socketpair(AF_UNIX, SOCK_STREAM, 0, sig_sktpipefd);
-  setnonblocking(sig_sktpipefd[1]);
-  addfd(__epfd, sig_sktpipefd[0]);  // 监听 sig_sktpipedfd[0] 的读事件
+  SetNonBlocking(sig_sktpipefd[1]);
+  AddFd(__epfd, sig_sktpipefd[0]);  // 监听 sig_sktpipedfd[0] 的读事件
   /* 设置信号处理函数，将接收到的信号全部发送到 sig_sktpipefd[1] */
-  addsig(SIGCHLD, sig_handler);
-  addsig(SIGTERM, sig_handler);
-  addsig(SIGINT, sig_handler);
-  addsig(SIGPIPE, SIG_IGN);  // 忽略 SIGPIPE 信号，防止进程被终止
+  AddSig(SIGCHLD, sig_handler);
+  AddSig(SIGTERM, sig_handler);
+  AddSig(SIGINT, sig_handler);
+  AddSig(SIGPIPE, SIG_IGN);  // 忽略 SIGPIPE 信号，防止进程被终止
 }
 
 template <typename T>
@@ -165,7 +165,7 @@ void processpool<T>::__run_child() {
   int sktpipefd = __sub_process[__idx].sktpipefd[1];
 
   /* 监听从父进程发来的消息，父进程会通过这个管道来通知子进程 accept 新连接 */
-  addfd(__epfd, sktpipefd);
+  AddFd(__epfd, sktpipefd);
 
   epoll_event events[MAX_EVENT_NUMBER];
   vector<T> users(USER_PER_PROCESS);
@@ -186,10 +186,10 @@ void processpool<T>::__run_child() {
           socklen_t client_addrlen = sizeof(client_addr);
           int connfd = Accept(__listenfd, &client_addr, &client_addrlen);
           if (connfd < 0) continue;
-          addfd(__epfd, connfd);
-          /* 逻辑处理类 T 需要实现 init 方法来初始化一个客户端连接
+          AddFd(__epfd, connfd);
+          /* 逻辑处理类 T 需要实现 Init 方法来初始化一个客户端连接
            * 使用 connfd来索引逻辑处理对象 */
-          users[connfd].init(__epfd, connfd, client_addr);
+          users[connfd].Init(__epfd, connfd, client_addr);
         }
       } else if (sockfd == sig_sktpipefd[0] &&
                  (events[i].events & EPOLLIN)) {  // 接收到信号
@@ -213,7 +213,7 @@ void processpool<T>::__run_child() {
           }
         }
       } else if (events[i].events & EPOLLIN) {  // 客户端的数据
-        users[sockfd].process();
+        users[sockfd].Process();
       }
     }
   }
@@ -226,7 +226,7 @@ template <typename T>
 void processpool<T>::__run_parent() {
   __setup();
   /* 父进程监听 __listenfd */
-  addfd(__epfd, __listenfd);
+  AddFd(__epfd, __listenfd);
   epoll_event events[MAX_EVENT_NUMBER];
 
   int sub_process_cnt = 0;

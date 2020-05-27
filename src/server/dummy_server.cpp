@@ -3,7 +3,7 @@
 static int __sig_sktpipefd_[2];  // 统一事件源，传输信号
 
 DummyServer::DummyServer(Config config)
-    : __users_(MAX_FD), __pool_(new threadpool<http_conn>(config.thread_num_)) {
+    : __users_(MAX_FD), __pool_(new threadpool<HttpConn>(config.thread_num_)) {
   __port_ = config.port_;
 
   __root_ = (char*)malloc(strlen(config.root_) + 1);
@@ -45,18 +45,18 @@ void DummyServer::__Listen() {
 
   /* 创建 epoll 内核事件表 */
   __epollfd_ = Epoll_create(5);
-  addfd(__epollfd_, __listenfd_, false, __triger_mode_);
-  http_conn::epollfd = __epollfd_;
+  AddFd(__epollfd_, __listenfd_, false, __triger_mode_);
+  HttpConn::epollfd_ = __epollfd_;
 
   /* 统一事件源 */
   Socketpair(AF_UNIX, SOCK_STREAM, 0, __sig_sktpipefd_);
-  setnonblocking(__sig_sktpipefd_[1]);  // 非阻塞写
-  addfd(__epollfd_, __sig_sktpipefd_[0], false, __triger_mode_);
-  addsig(SIGTERM, __SigHandler, false);
-  addsig(SIGINT, __SigHandler, false);
+  SetNonBlocking(__sig_sktpipefd_[1]);  // 非阻塞写
+  AddFd(__epollfd_, __sig_sktpipefd_[0], false, __triger_mode_);
+  AddSig(SIGTERM, __SigHandler, false);
+  AddSig(SIGINT, __SigHandler, false);
 
   /* 忽略 SIGPIPE 信号 */
-  addsig(SIGPIPE, SIG_IGN);
+  AddSig(SIGPIPE, SIG_IGN);
 }
 
 /* 启动服务器 */
@@ -75,7 +75,7 @@ void DummyServer::Start() {
         __AddClient();
       } else if (__events_[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
         /* 异常，关闭连接 */
-        __users_[sockfd].close_conn();
+        __users_[sockfd].CloseConn();
       } else if ((sockfd == __sig_sktpipefd_[0]) &&
                  (__events_[i].events & EPOLLIN)) {
         __SignalProcess();
@@ -92,12 +92,12 @@ void DummyServer::__AddClient() {
   struct sockaddr_in client_addr;
   socklen_t client_addrlen = sizeof(client_addr);
   int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
-  if (http_conn::user_cnt >= MAX_FD) {
+  if (HttpConn::user_cnt_ >= MAX_FD) {
     SendError(connfd, "Internal server busy");
     return;
   }
   /* 将新用户加入用户数组 */
-  __users_[connfd].init(connfd, client_addr);
+  __users_[connfd].Init(connfd, client_addr);
 }
 
 void DummyServer::__SignalProcess() {
@@ -127,19 +127,19 @@ void DummyServer::__SignalProcess() {
 void DummyServer::__ReadFromClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据读的结果，决定是添加任务还是关闭连接 */
-  if (__users_[sockfd].read()) {
+  if (__users_[sockfd].Read()) {
     __pool_->append(&__users_[sockfd]);
   } else {
     SendError(sockfd, "Internal read error");
-    __users_[sockfd].close_conn();
+    __users_[sockfd].CloseConn();
   }
 }
 
 void DummyServer::__WriteToClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据写的结果，决定是添加任务还是关闭连接 */
-  if (!__users_[sockfd].write()) {
+  if (!__users_[sockfd].Write()) {
     SendError(sockfd, "Internal write error");
-    __users_[sockfd].close_conn();
+    __users_[sockfd].CloseConn();
   }
 }

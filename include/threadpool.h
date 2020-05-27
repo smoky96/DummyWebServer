@@ -22,8 +22,8 @@ class threadpool {
   size_t __max_requests;              // 请求队列中允许的最大请求数
   vector<pthread_t> __threads;        // 记录线程 id
   list<T*> __jobs;                    // 任务队列
-  locker __jobs_locker;               // 对 jobs 的互斥锁
-  sem __jobs_stat;                    // 是否有任务
+  Locker __jobs_locker;               // 对 jobs 的互斥锁
+  Sem __jobs_stat;                    // 是否有任务
   volatile std::atomic<bool> __stop;  // 是否停止线程
 
   /* 工作线程运行函数 */
@@ -66,10 +66,10 @@ bool threadpool<T>::append(T* request) {
   if (__jobs.size() > __max_requests) {
     return false;
   }
-  __jobs_locker.lock();
+  __jobs_locker.Lock();
   __jobs.push_back(request);
-  __jobs_locker.unlock();
-  __jobs_stat.post();
+  __jobs_locker.Unlcok();
+  __jobs_stat.Post();
   return true;
 }
 
@@ -83,16 +83,16 @@ void* threadpool<T>::__worker(void* arg) {
 template <typename T>
 void threadpool<T>::__run() {
   while (!__stop) {
-    __jobs_stat.wait();
+    __jobs_stat.Wait();
     if (!__jobs.empty()) {
       T* request = nullptr;
-      __jobs_locker.lock();
+      __jobs_locker.Lock();
       if (!__jobs.empty()) {
         request = __jobs.front();
         __jobs.pop_front();
       }
-      __jobs_locker.unlock();
-      if (request) request->process();
+      __jobs_locker.Unlcok();
+      if (request) request->Process();
     }
   }
 }

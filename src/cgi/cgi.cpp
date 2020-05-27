@@ -2,87 +2,87 @@
 #include "processpool.h"
 
 /* 处理客户 CGI 请求，可作为 processpool 类的模板参数 */
-class cgi {
+class Cgi {
  private:
-  static const int BUFFER_SIZE = 1024;
-  static int __epollfd;
-  int __sockfd;
-  sockaddr_in __addr;
-  char __buf[BUFFER_SIZE];
-  int __read_idx;  // 标记已读客户端数据的最后一个字节的下一个位置
+  static const int __kBufferSize_ = 1024;
+  static int __epollfd_;
+  int __sockfd_;
+  sockaddr_in __addr_;
+  char __buf_[__kBufferSize_];
+  int __read_idx_;  // 标记已读客户端数据的最后一个字节的下一个位置
 
-  void __reset_buf() {
-    memset(__buf, '\0', BUFFER_SIZE);
-    __read_idx = 0;
+  void __ResetBuf() {
+    memset(__buf_, '\0', __kBufferSize_);
+    __read_idx_ = 0;
   }
 
  public:
-  cgi() {}
-  ~cgi() {}
+  Cgi() {}
+  ~Cgi() {}
 
   /* 初始化客户连接，清空读缓冲区 */
-  void init(int epollfd, int sockfd, const sockaddr_in& client_addr) {
-    __epollfd = epollfd;
-    __sockfd = sockfd;
-    __addr = client_addr;
-    __reset_buf();
+  void Init(int epollfd, int sockfd, const sockaddr_in& client_addr) {
+    __epollfd_ = epollfd;
+    __sockfd_ = sockfd;
+    __addr_ = client_addr;
+    __ResetBuf();
   }
 
-  void process() {
+  void Process() {
     int idx = 0;
     int ret = -1;
     while (1) {
-      ret = Recv(__sockfd, __buf + idx, BUFFER_SIZE - idx - 1, 0);
+      ret = Recv(__sockfd_, __buf_ + idx, __kBufferSize_ - idx - 1, 0);
       if (ret < 0) {
         /* 若读操作发生错误，则关闭客户端连接；若无数据可读，退出循环 */
         if (errno != EAGAIN) {
-          removefd(__epollfd, __sockfd);
+          RemoveFd(__epollfd_, __sockfd_);
         }
         break;
       } else if (ret == 0) {
-        removefd(__epollfd, __sockfd);
+        RemoveFd(__epollfd_, __sockfd_);
         break;
       } else {
-        __read_idx += ret;
-        printf("user content is: %s\n", __buf);
-        for (; idx < __read_idx; ++idx) {
+        __read_idx_ += ret;
+        printf("user content is: %s\n", __buf_);
+        for (; idx < __read_idx_; ++idx) {
           /* 若遇到字符 "\r\n" 则开始处理客户请求 */
-          if (idx >= 1 && (__buf[idx - 1] == '\r' && __buf[idx] == '\n')) {
+          if (idx >= 1 && (__buf_[idx - 1] == '\r' && __buf_[idx] == '\n')) {
             break;
           }
         }
         /* 若读完还没有遇到字符 '\r\n' 则继续接收 */
-        if (idx == __read_idx) {
-          if (__read_idx == BUFFER_SIZE - 1) {
+        if (idx == __read_idx_) {
+          if (__read_idx_ == __kBufferSize_ - 1) {
             char msg[] = "content overflow\n";
             printf("user content overflow\n");
-            Send(__sockfd, msg, sizeof(msg), 0);
-            removefd(__epollfd, __sockfd);
+            Send(__sockfd_, msg, sizeof(msg), 0);
+            RemoveFd(__epollfd_, __sockfd_);
             break;
           }
           continue;
         }
 
-        __buf[idx - 1] = '\0';
-        char* filename = __buf;
+        __buf_[idx - 1] = '\0';
+        char* filename = __buf_;
         /* 判断文件是否存在 */
         if (access(filename, F_OK) < 0) {
-          removefd(__epollfd, __sockfd);
+          RemoveFd(__epollfd_, __sockfd_);
 
           /* 一条请求处理完毕，重置缓存 */
-          __reset_buf();
+          __ResetBuf();
           break;
         }
         ret = fork();
         if (ret == -1 || ret > 0) {
-          removefd(__epollfd, __sockfd);
+          RemoveFd(__epollfd_, __sockfd_);
 
           /* 一条请求处理完毕，重置缓存 */
-          __reset_buf();
+          __ResetBuf();
           break;
         } else {
-          Dup2(__sockfd, STDOUT_FILENO);
-          execl(__buf, __buf, NULL);
+          Dup2(__sockfd_, STDOUT_FILENO);
+          execl(__buf_, __buf_, NULL);
           exit(0);
         }
       }
@@ -90,7 +90,7 @@ class cgi {
   }
 };
 
-int cgi::__epollfd = -1;
+int Cgi::__epollfd_ = -1;
 
 int main(int argc, char** argv) {
   if (argc <= 2) {
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
 
   Listen(listenfd, 5);
 
-  processpool<cgi>* pool = processpool<cgi>::create(listenfd);
+  processpool<Cgi>* pool = processpool<Cgi>::create(listenfd);
   if (pool) {
     pool->run();
   }

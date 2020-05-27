@@ -274,7 +274,7 @@ int Pthread_detach(pthread_t thread) {
 }
 
 /* 设置非阻塞 io */
-int setnonblocking(int fd) {
+int SetNonBlocking(int fd) {
   int old_opt = fcntl(fd, F_GETFL);
   int new_opt = old_opt | O_NONBLOCK;
   fcntl(fd, F_SETFL, new_opt);
@@ -284,7 +284,7 @@ int setnonblocking(int fd) {
 /* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件
  * one_shot: 是否采用 one-shot 行为，默认 false
  * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
-void addfd(int epollfd, int fd, bool one_shot, int triger_mode) {
+void AddFd(int epollfd, int fd, bool one_shot, int triger_mode) {
   epoll_event event;
   event.data.fd = fd;
   event.events = EPOLLIN | EPOLLRDHUP;
@@ -293,13 +293,13 @@ void addfd(int epollfd, int fd, bool one_shot, int triger_mode) {
   if (one_shot) event.events |= EPOLLONESHOT;
 
   Epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-  setnonblocking(fd);
+  SetNonBlocking(fd);
 }
 
 /* 重设 one-shot，
  * ev 为附加监听事件，最终监听事件为 ev | EPOLLONESHOT | EPOLLRDHUP
  * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
-void modfd(int epollfd, int fd, int ev, int triger_mode) {
+void ModFd(int epollfd, int fd, int ev, int triger_mode) {
   epoll_event event;
   event.data.fd = fd;
   event.events = ev | EPOLLONESHOT | EPOLLRDHUP;
@@ -310,13 +310,13 @@ void modfd(int epollfd, int fd, int ev, int triger_mode) {
 }
 
 /* 从 epoll 事件表中删除 fd */
-void removefd(int epollfd, int fd) {
+void RemoveFd(int epollfd, int fd) {
   Epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, 0);
   Close(fd);
 }
 
 /* 设置捕获信号 */
-void addsig(int signum, void (*handler)(int), bool restart) {
+void AddSig(int signum, void (*handler)(int), bool restart) {
   struct sigaction sa;
   bzero(&sa, sizeof(sa));
   sa.sa_handler = handler;

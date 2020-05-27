@@ -13,12 +13,6 @@
 using std::unique_ptr;
 using std::vector;
 
-void send_error(int connfd, const char* info) {
-  printf("%s", info);
-  Send(connfd, info, strlen(info), 0);
-  Close(connfd);
-}
-
 int main(int argc, char** argv) {
   char root[] = "/home/dong/blog/";
   Config config(root);

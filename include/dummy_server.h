@@ -35,12 +35,12 @@ class Config {
 
 class DummyServer {
  private:
-  int __port_;                 // 端口号
-  char* __root_;               // 网站根目录
-  vector<http_conn> __users_;  // 客户端数组
-  int __thread_num_;           // 线程数
+  int __port_;                // 端口号
+  char* __root_;              // 网站根目录
+  vector<HttpConn> __users_;  // 客户端数组
+  int __thread_num_;          // 线程数
 
-  std::unique_ptr<threadpool<http_conn>> __pool_;
+  std::unique_ptr<threadpool<HttpConn>> __pool_;
 
   epoll_event __events_[MAX_EVENT_NUM];  // 触发事件数组
   int __epollfd_;                        // epoll 内核事件表描述符

@@ -3,9 +3,9 @@
 #include <cstring>
 #include <string>
 
-inline unsigned char to_hex(unsigned char x) { return x > 9 ? x + 55 : x + 48; }
+inline unsigned char ToHex(unsigned char x) { return x > 9 ? x + 55 : x + 48; }
 
-inline unsigned char from_hex(unsigned char x) {
+inline unsigned char FromHex(unsigned char x) {
   unsigned char y;
   if (x >= 'A' && x <= 'Z')
     y = x - 'A' + 10;
@@ -18,7 +18,7 @@ inline unsigned char from_hex(unsigned char x) {
   return y;
 }
 
-inline int url_encode(const char* str, char* buf, size_t bufsize) {
+inline int UrlEncode(const char* str, char* buf, size_t bufsize) {
   char tmp[bufsize];
   size_t length = strlen(str);
   size_t i;
@@ -33,9 +33,9 @@ inline int url_encode(const char* str, char* buf, size_t bufsize) {
       if (i == bufsize - 3) return -1;
       tmp[i] = '%';
       i += 1;
-      tmp[i] = to_hex((unsigned char)str[i] >> 4);
+      tmp[i] = ToHex((unsigned char)str[i] >> 4);
       i += 1;
-      tmp[i] = to_hex((unsigned char)str[i] % 16);
+      tmp[i] = ToHex((unsigned char)str[i] % 16);
     }
   }
   tmp[i] = '\0';
@@ -45,7 +45,7 @@ inline int url_encode(const char* str, char* buf, size_t bufsize) {
   return 0;
 }
 
-inline int url_decode(const char* str, char* buf, size_t bufsize) {
+inline int UrlDecode(const char* str, char* buf, size_t bufsize) {
   char tmp[bufsize];
   size_t length = strlen(str);
   size_t i;
@@ -55,8 +55,8 @@ inline int url_decode(const char* str, char* buf, size_t bufsize) {
       tmp[i] = ' ';
     else if (str[i] == '%') {
       assert(i + 2 < length);
-      unsigned char high = from_hex((unsigned char)str[++i]);
-      unsigned char low = from_hex((unsigned char)str[++i]);
+      unsigned char high = FromHex((unsigned char)str[++i]);
+      unsigned char low = FromHex((unsigned char)str[++i]);
       tmp[i] = high * 16 + low;
     } else
       tmp[i] = str[i];
