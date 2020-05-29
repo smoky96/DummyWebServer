@@ -285,6 +285,10 @@ HttpConn::HttpCode_ HttpConn::__DoRequest() {
   if (UrlDecode(__url_, buf, kFileNameLen_ - len) < 0) {
     return BAD_REQUEST;
   }
+  /* 获取请求参数 */
+  char *arg = strchr(buf, '?');
+  if (arg) *(arg++) = '\0';
+
   strncpy(__real_file_ + len - 1, buf, kFileNameLen_ - len);
   if (Stat(__real_file_, &__file_stat_) < 0) {
     return NO_RESOURCE;
