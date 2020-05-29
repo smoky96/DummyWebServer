@@ -257,14 +257,14 @@ HttpConn::HttpCode_ HttpConn::__ProcessRead() {
 
 /* 得到完整 HTTP 请求后，分析目标文件属性，将其映射到内存地址 __file_addr_ 处 */
 HttpConn::HttpCode_ HttpConn::__DoRequest() {
-  char buf[kFileNameLen_];
-  /* url 解码 */
-  if (UrlDecode(__url_, buf, kFileNameLen_) < 0) {
-    return BAD_REQUEST;
-  }
   strcpy(__real_file_, doc_root);
   int len = strlen(doc_root);
-  strncpy(__real_file_ + len, buf, kFileNameLen_ - len - 1);
+  char buf[kFileNameLen_ - len];
+  /* url 解码 */
+  if (UrlDecode(__url_, buf, kFileNameLen_ - len) < 0) {
+    return BAD_REQUEST;
+  }
+  strncpy(__real_file_ + len - 1, buf, kFileNameLen_ - len);
   if (Stat(__real_file_, &__file_stat_) < 0) {
     return NO_RESOURCE;
   }
