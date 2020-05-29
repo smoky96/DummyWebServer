@@ -1,7 +1,7 @@
 #include "conmmon.h"
 #include "processpool.h"
 
-/* 处理客户 CGI 请求，可作为 processpool 类的模板参数 */
+/* 处理客户 CGI 请求，可作为 Processpool 类的模板参数 */
 class Cgi {
  private:
   static const int __kBufferSize_ = 1024;
@@ -112,9 +112,9 @@ int main(int argc, char** argv) {
 
   Listen(listenfd, 5);
 
-  processpool<Cgi>* pool = processpool<Cgi>::create(listenfd);
+  Processpool<Cgi>* pool = Processpool<Cgi>::Create(listenfd);
   if (pool) {
-    pool->run();
+    pool->Run();
   }
   Close(listenfd);
 

@@ -40,7 +40,7 @@ class DummyServer {
   vector<HttpConn> __users_;  // 客户端数组
   int __thread_num_;          // 线程数
 
-  std::unique_ptr<threadpool<HttpConn>> __pool_;
+  std::unique_ptr<Threadpool<HttpConn>> __pool_;
 
   epoll_event __events_[MAX_EVENT_NUM];  // 触发事件数组
   int __epollfd_;                        // epoll 内核事件表描述符

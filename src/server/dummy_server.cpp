@@ -3,7 +3,7 @@
 static int __sig_sktpipefd_[2];  // 统一事件源，传输信号
 
 DummyServer::DummyServer(Config config)
-    : __users_(MAX_FD), __pool_(new threadpool<HttpConn>(config.thread_num_)) {
+    : __users_(MAX_FD), __pool_(new Threadpool<HttpConn>(config.thread_num_)) {
   __port_ = config.port_;
 
   __root_ = (char*)malloc(strlen(config.root_) + 1);
@@ -128,7 +128,7 @@ void DummyServer::__ReadFromClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据读的结果，决定是添加任务还是关闭连接 */
   if (__users_[sockfd].Read()) {
-    __pool_->append(&__users_[sockfd]);
+    __pool_->Append(&__users_[sockfd]);
   } else {
     SendError(sockfd, "Internal read error");
     __users_[sockfd].CloseConn();
