@@ -10,7 +10,7 @@ DummyServer::DummyServer(Config config)
   if (!__root_) throw std::bad_alloc();
   strcpy(__root_, config.root_);
 
-  __triger_mode_ = ET;
+  __triger_mode_ = config.triger_mode_;
 }
 
 DummyServer::~DummyServer() {
@@ -46,6 +46,7 @@ void DummyServer::__Listen() {
   /* 创建 epoll 内核事件表 */
   __epollfd_ = Epoll_create(5);
   AddFd(__epollfd_, __listenfd_, false, __triger_mode_);
+  if (__triger_mode_ == ET) SetNonBlocking(__listenfd_);
   HttpConn::epollfd_ = __epollfd_;
 
   /* 统一事件源 */
@@ -91,13 +92,33 @@ void DummyServer::Start() {
 void DummyServer::__AddClient() {
   struct sockaddr_in client_addr;
   socklen_t client_addrlen = sizeof(client_addr);
-  int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
-  if (HttpConn::user_cnt_ >= MAX_FD) {
-    SendError(connfd, "Internal server busy");
-    return;
+  if (__triger_mode_ == ET) {
+    while (1) {
+      int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
+      if (connfd < 0) {
+        if (errno != EAGAIN) PRINT_ERRMSG(__AddClient, "Accept failure");
+        return;
+      }
+      if (HttpConn::user_cnt_ >= MAX_FD) {
+        SendError(connfd, "Internal server busy");
+        return;
+      }
+      /* 将新用户加入用户数组 */
+      __users_[connfd].Init(connfd, client_addr);
+    }
+  } else {
+    int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
+    if (connfd < 0) {
+      if (errno != EAGAIN) PRINT_ERRMSG(__AddClient, "Accept failure");
+      return;
+    }
+    if (HttpConn::user_cnt_ >= MAX_FD) {
+      SendError(connfd, "Internal server busy");
+      return;
+    }
+    /* 将新用户加入用户数组 */
+    __users_[connfd].Init(connfd, client_addr);
   }
-  /* 将新用户加入用户数组 */
-  __users_[connfd].Init(connfd, client_addr);
 }
 
 void DummyServer::__SignalProcess() {
@@ -130,7 +151,6 @@ void DummyServer::__ReadFromClient(int sockfd) {
   if (__users_[sockfd].Read()) {
     __pool_->Append(&__users_[sockfd]);
   } else {
-    SendError(sockfd, "Internal read error");
     __users_[sockfd].CloseConn();
   }
 }
@@ -139,7 +159,6 @@ void DummyServer::__WriteToClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据写的结果，决定是添加任务还是关闭连接 */
   if (!__users_[sockfd].Write()) {
-    SendError(sockfd, "Internal write error");
     __users_[sockfd].CloseConn();
   }
 }

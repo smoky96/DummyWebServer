@@ -15,7 +15,7 @@ using std::vector;
 
 int main(int argc, char** argv) {
   char root[] = "/home/dong/blog/";
-  Config config(root);
+  Config config(root, 8080, 8, ET);
 
   DummyServer server(config);
 

@@ -40,10 +40,12 @@ void HttpConn::CloseConn(bool real_close) {
   }
 }
 
-void HttpConn::Init(int sockfd, const sockaddr_in &addr) {
+void HttpConn::Init(int sockfd, const sockaddr_in &addr,
+                    TrigerMode triger_mode) {
   __sockfd_ = sockfd;
   __addr_ = addr;
-  AddFd(epollfd_, sockfd, true);
+  __triger_mode_ = triger_mode;
+  AddFd(epollfd_, sockfd, true, __triger_mode_);
   ++user_cnt_;
   __Init();
 }
@@ -106,14 +108,33 @@ bool HttpConn::Read() {
   }
 
   int bytes_read = 0;
-  while (1) {
+  if (__triger_mode_ == ET) {
+    while (1) {
+      bytes_read = Recv(__sockfd_, __read_buf + __read_idx_,
+                        kReadBufSize_ - __read_idx_, 0);
+      if (bytes_read == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+          /* 非阻塞 */
+          break;
+        }
+        SendError(__sockfd_, "Internal read error");
+        return false;
+      } else if (bytes_read == 0) {
+        /* 对方关闭连接 */
+        return false;
+      } else {
+        __read_idx_ += bytes_read;
+      }
+    }
+  } else {
     bytes_read = Recv(__sockfd_, __read_buf + __read_idx_,
                       kReadBufSize_ - __read_idx_, 0);
     if (bytes_read == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         /* 非阻塞 */
-        break;
+        return true;
       }
+      SendError(__sockfd_, "Internal read error");
       return false;
     } else if (bytes_read == 0) {
       /* 对方关闭连接 */
@@ -313,19 +334,50 @@ void HttpConn::__AdjustIov() {
 bool HttpConn::Write() {
   int tmp = 0;
   if (__bytes_to_send_ == 0) {
-    ModFd(epollfd_, __sockfd_, EPOLLIN);
+    ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
     __Init();
     return true;
   }
-  while (1) {
+  if (__triger_mode_ == ET) {
+    while (1) {
+      tmp = Writev(__sockfd_, __iov_, __iov_cnt_);
+      if (tmp < 0) {
+        if (errno == EAGAIN) {
+          /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
+          ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
+          return true;
+        }
+        __Unmap();
+        SendError(__sockfd_, "Internal write error");
+        return false;
+      }
+      __bytes_to_send_ -= tmp;
+      __bytes_have_sent_ += tmp;
+      __AdjustIov();
+
+      if (__bytes_to_send_ <= 0) {
+        __Unmap();
+        /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
+        if (__linger_) {
+          __Init();
+          ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+          return true;
+        } else {
+          ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+          return false;
+        }
+      }
+    }
+  } else {
     tmp = Writev(__sockfd_, __iov_, __iov_cnt_);
     if (tmp < 0) {
       if (errno == EAGAIN) {
         /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
-        ModFd(epollfd_, __sockfd_, EPOLLOUT);
+        ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
         return true;
       }
       __Unmap();
+      SendError(__sockfd_, "Internal write error");
       return false;
     }
     __bytes_to_send_ -= tmp;
@@ -337,12 +389,15 @@ bool HttpConn::Write() {
       /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
       if (__linger_) {
         __Init();
-        ModFd(epollfd_, __sockfd_, EPOLLIN);
+        ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
         return true;
       } else {
-        ModFd(epollfd_, __sockfd_, EPOLLIN);
+        ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
         return false;
       }
+    } else {
+      ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+      return true;
     }
   }
   return false;
@@ -447,7 +502,7 @@ void HttpConn::Process() {
   HttpCode_ read_ret = __ProcessRead();
   if (read_ret == NO_REQUEST) {
     /* 还没收到完整请求，继续监听 */
-    ModFd(epollfd_, __sockfd_, EPOLLIN);
+    ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
     return;
   }
   bool write_ret = __ProcessWrite(read_ret);
@@ -456,5 +511,5 @@ void HttpConn::Process() {
     CloseConn();
   }
   /* 监听是否可写 */
-  ModFd(epollfd_, __sockfd_, EPOLLOUT);
+  ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
 }

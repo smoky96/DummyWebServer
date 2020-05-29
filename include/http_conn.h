@@ -37,7 +37,7 @@ class HttpConn {
   ~HttpConn() {}
 
   /* 初始化新接收的连接 */
-  void Init(int sockfd, const sockaddr_in& addr);
+  void Init(int sockfd, const sockaddr_in& addr, TrigerMode triger_mode = ET);
   /* 关闭连接 */
   void CloseConn(bool real_close = true);
   /* 处理客户请求 */
@@ -71,11 +71,12 @@ class HttpConn {
   int __content_length_;             // HTTP 请求消息体的长度
   bool __linger_;                    // 是否保持连接
   char* __file_addr_;  // 客户端请求的目标文件在 mmap 的内存中的起始位置
-  struct stat __file_stat_;  // 目标文件的状态
-  struct iovec __iov_[2];    // 集中写
-  int __iov_cnt_;            // 被写内存块的数量
-  int __bytes_to_send_;      // 待发送字节数
-  int __bytes_have_sent_;    // 已发送字节数
+  struct stat __file_stat_;   // 目标文件的状态
+  struct iovec __iov_[2];     // 集中写
+  int __iov_cnt_;             // 被写内存块的数量
+  int __bytes_to_send_;       // 待发送字节数
+  int __bytes_have_sent_;     // 已发送字节数
+  TrigerMode __triger_mode_;  // epoll 触发模式
 
  private:
   /* 初始化连接 */

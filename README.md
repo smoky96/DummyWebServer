@@ -72,7 +72,7 @@ $ make
 ## To-Do
 
 - [ ] 加入 POST 方法
-- [ ] 提供 epoll 的 ET 与 LT 两种触发模式的选择
+- [x] 提供 epoll 的 ET 与 LT 两种触发模式的选择
 - [ ] 提供 Reactor 与 Proactor 两种并发模型的选择
 - [ ] 加入数据库支持
 

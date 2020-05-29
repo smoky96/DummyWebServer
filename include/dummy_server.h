@@ -14,19 +14,20 @@
 
 using std::vector;
 
-enum TrigerMode { ET = 0, LT };
-
 class Config {
  public:
-  int port_;        // 端口号
-  int thread_num_;  // 线程数
-  const char* root_;
+  int port_;                // 端口号
+  int thread_num_;          // 线程数
+  const char* root_;        // 网站根目录
+  TrigerMode triger_mode_;  // epoll 触发模式
 
  public:
-  Config(char* root, int port = 8080, int thread_num = 8) {
+  Config(char* root, int port = 8080, int thread_num = 8,
+         TrigerMode triger_mode = ET) {
     root_ = root;  // 注意这里为浅拷贝
     port_ = port;
     thread_num_ = thread_num;
+    triger_mode_ = triger_mode;
   };
   ~Config() {}
 
