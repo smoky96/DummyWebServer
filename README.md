@@ -34,9 +34,10 @@ $ make
 
 目前可供选择的参数在 include/dummy_server.h 中的 Config 类中查看，有：
 
-* root 网站根目录（需要自己更改）
-* port 端口号（默认为 8080）
-* 线程数（默认为 8）
+* root: 网站根目录（需要自己更改）
+* port: 端口号（默认为 8080）
+* thread_num: 线程数（默认为 8）
+* triger_mode: Epoll 触发模式（默认为 ET）
 
 可以自己更改源代码以设置参数，注意使用前更改 src/server/server.cpp 文件中 main 函数的 root 变量，请改为自己的网站根目录，然后重新编译程序。
 
