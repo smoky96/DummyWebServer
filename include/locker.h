@@ -44,7 +44,7 @@ class Locker {
 
   bool Lock() { return pthread_mutex_lock(&__mutex_) == 0; }
 
-  bool Unlcok() { return pthread_mutex_unlock(&__mutex_) == 0; }
+  bool Unlock() { return pthread_mutex_unlock(&__mutex_) == 0; }
 };
 
 class Cond {

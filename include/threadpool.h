@@ -68,7 +68,7 @@ bool Threadpool<T>::Append(T* request) {
   }
   __jobs_locker_.Lock();
   __jobs_.push_back(request);
-  __jobs_locker_.Unlcok();
+  __jobs_locker_.Unlock();
   __jobs_stat_.Post();
   return true;
 }
@@ -91,7 +91,7 @@ void Threadpool<T>::__Run() {
         request = __jobs_.front();
         __jobs_.pop_front();
       }
-      __jobs_locker_.Unlcok();
+      __jobs_locker_.Unlock();
       if (request) request->Process();
     }
   }

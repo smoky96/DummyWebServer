@@ -65,7 +65,7 @@ class Processpool {
          * __instance_ 虽然不为空，但其还没有构造完成的情况 */
         __instance_.store(tmp, std::memory_order_relaxed);
       }
-      __instance_locker.Unlcok();
+      __instance_locker.Unlock();
     }
     return tmp;
   }
@@ -75,7 +75,7 @@ class Processpool {
       __instance_locker.Lock();
       // printf("destructor in child %d\n", getpid());
       if (__instance_ != nullptr) delete __instance_;
-      __instance_locker.Unlcok();
+      __instance_locker.Unlock();
     }
   }
 
