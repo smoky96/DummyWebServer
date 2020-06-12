@@ -1,8 +1,15 @@
 #ifndef __HTTP_CONN__H__
 #define __HTTP_CONN__H__
 
+#include <map>
+#include <string>
+
 #include "conmmon.h"
 #include "locker.h"
+#include "sql_connpool.h"
+
+using std::map;
+using std::string;
 
 class HttpConn {
  public:
@@ -46,6 +53,8 @@ class HttpConn {
   bool Read();
   /* 非阻塞写 */
   bool Write();
+  /* 将用户名密码加载到内存 */
+  static void InitSqlResult();
 
  public:
   /* epoll 内核事件表，所有 socket 事件都注册到同一个事件表，所以设为静态 */
@@ -77,6 +86,10 @@ class HttpConn {
   int __bytes_to_send_;       // 待发送字节数
   int __bytes_have_sent_;     // 已发送字节数
   TrigerMode __triger_mode_;  // epoll 触发模式
+
+  string __sql_user_;
+  string __sql_passwd_;
+  string __sql_name_;
 
  private:
   /* 初始化连接 */

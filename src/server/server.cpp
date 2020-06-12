@@ -14,8 +14,7 @@ using std::unique_ptr;
 using std::vector;
 
 int main(int argc, char** argv) {
-  char root[] = "/home/dong/blog/";
-  Config config(root, 8080, 8, ET);
+  Config config("dong", "abcd1234", "test_db", 8, 1080, 8, ET);
 
   DummyServer server(config);
 

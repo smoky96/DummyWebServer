@@ -3,18 +3,17 @@
 static int __sig_sktpipefd_[2];  // 统一事件源，传输信号
 
 DummyServer::DummyServer(Config config)
-    : __users_(MAX_FD), __pool_(new Threadpool<HttpConn>(config.thread_num_)) {
+    : __users_(MAX_FD),
+      __pool_(new Threadpool<HttpConn>(config.thread_num_)),
+      __sql_user_(config.sql_user_),
+      __sql_passwd_(config.sql_passwd_),
+      __db_name_(config.db_name_) {
   __port_ = config.port_;
-
-  __root_ = (char*)malloc(strlen(config.root_) + 1);
-  if (!__root_) throw std::bad_alloc();
-  strcpy(__root_, config.root_);
-
   __triger_mode_ = config.triger_mode_;
+  __sql_num = config.sql_num_;
 }
 
 DummyServer::~DummyServer() {
-  free(__root_);
   Close(__epollfd_);
   Close(__listenfd_);
 }
@@ -62,6 +61,7 @@ void DummyServer::__Listen() {
 
 /* 启动服务器 */
 void DummyServer::Start() {
+  __SqlConnpool();
   __Listen();
 
   __stop_server_ = false;
@@ -161,4 +161,10 @@ void DummyServer::__WriteToClient(int sockfd) {
   if (!__users_[sockfd].Write()) {
     __users_[sockfd].CloseConn();
   }
+}
+
+void DummyServer::__SqlConnpool() {
+  SqlConnpool::Init("localhost", __sql_user_, __sql_passwd_, __db_name_, 3306,
+                    __sql_num);
+  HttpConn::InitSqlResult();
 }

@@ -6,7 +6,7 @@ SRC		:= src
 INCLUDE	:= include
 LIB		:= lib
 
-LIBRARIES	:= -lrt -pthread
+LIBRARIES	:= -lrt -lpthread -lmysqlclient
 
 EXECUTABLE1	:= server
 EXECUTABLE2	:= cgi

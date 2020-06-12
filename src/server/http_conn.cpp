@@ -26,11 +26,14 @@ const char *error_500_form =
     "There was an unusual problem serving the request file.\n";
 
 /* 网站根目录 */
-const char *doc_root = "/home/dong/blog/";
+const char *doc_root = "root/";
 const char *default_page = "/index.html";
 
 int HttpConn::user_cnt_ = 0;
 int HttpConn::epollfd_ = -1;
+
+static map<string, string> users;  // 所用用户名和密码
+static Locker locker;              // 用户名数据加锁
 
 void HttpConn::CloseConn(bool real_close) {
   if (real_close && (__sockfd_ != -1)) {
@@ -159,6 +162,8 @@ HttpConn::HttpCode_ HttpConn::__ParseRequestLine(char *text) {
   char *method = text;
   if (strcasecmp(method, "GET") == 0) {
     __method_ = GET;
+  } else if (strcasecmp(method, "POST") == 0) {
+    __method_ = POST;
   } else {
     /* 暂时只支持 GET 方法 */
     return BAD_REQUEST;
@@ -290,6 +295,67 @@ HttpConn::HttpCode_ HttpConn::__DoRequest() {
   if (arg) *(arg++) = '\0';
 
   strncpy(__real_file_ + len - 1, buf, kFileNameLen_ - len);
+
+  if (__method_ == POST) {
+    /* 提取 POST 参数 */
+    char username[100];
+    char password[100];
+    do {
+      char *tmp = strpbrk(&__read_buf[__cur_idx_], "=");
+      if (tmp == nullptr) {
+        username[0] = '\0';
+        break;
+      }
+      int i = 0;
+      for (; *(++tmp) != '&'; ++i) {
+        username[i] = *tmp;
+      }
+      username[i] = '\0';
+      tmp = strpbrk(tmp, "=");
+      if (tmp == nullptr) {
+        password[0] = '\0';
+        break;
+      }
+      for (i = 0; *(++tmp) != '\0'; ++i) {
+        password[i] = *tmp;
+      }
+      password[i] = '\0';
+    } while (0);
+
+    char *basename = strrchr(__real_file_, '/');
+    ++basename;
+    if (strcasecmp(basename, "sqllogin") == 0) {  // 登录按钮
+      if (users.find(username) != users.end() && users[username] == password)
+        strcpy(basename, "welcome.html");
+      else
+        strcpy(basename, "login_error.html");
+    } else if (strcasecmp(basename, "sqlregister") == 0) {  // 注册按钮
+      char sql_statement[300];
+      sprintf(sql_statement,
+              "INSERT INTO user(username, passwd) VALUES('%s', '%s')", username,
+              password);
+      if (users.count(username)) {
+        strcpy(basename, "register_error.html");
+      } else {
+        MYSQL *mysql;
+        ConnectionRaii conn(mysql);
+        locker.Lock();
+        int result = mysql_query(mysql, sql_statement);
+        users.insert(std::make_pair(username, password));
+        locker.Unlock();
+
+        if (!result)
+          strcpy(basename, "login.html");
+        else
+          strcpy(basename, "register_error.html");
+      }
+    } else if (strcasecmp(basename, "login") == 0) {  // 进入登录页面
+      strcpy(basename, "login.html");
+    } else if (strcasecmp(basename, "register") == 0) {  // 进入注册页面
+      strcpy(basename, "register.html");
+    }
+  }
+
   if (Stat(__real_file_, &__file_stat_) < 0) {
     return NO_RESOURCE;
   }
@@ -516,4 +582,23 @@ void HttpConn::Process() {
   }
   /* 监听是否可写 */
   ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
+}
+
+void HttpConn::InitSqlResult() {
+  /* 数据库连接资源获取 */
+  MYSQL *mysql = nullptr;
+  ConnectionRaii conn(mysql);
+
+  /* 获取数据库中的用户名密码 */
+  if (mysql_query(mysql, "SELECT username, passwd FROM user")) {
+    PRINT_ERRMSG(mysql_query, mysql_error(mysql));
+  }
+
+  /* 获取检索结果 */
+  MYSQL_RES *result = mysql_store_result(mysql);
+
+  /* 讲用户名密码全部缓存进 map 中 */
+  while (MYSQL_ROW row = mysql_fetch_row(result)) {
+    users[row[0]] = row[1];
+  }
 }
