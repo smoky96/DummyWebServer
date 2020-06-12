@@ -69,13 +69,20 @@ $ make
   * 支持 GET 请求
   * 完成 CGI 程序
   * 完成压力测试程序
+* 2020.06.12
+  * 增加了 URL 编码与解码，现在支持中文路径了
+  * 加入了 ET 与 LT 两种触发模式的选择
+  * 现已支持 POST 方法（都是硬编码的，只能支持代码文件中 root 目录下的网站，该网站从 [@qinguoyi](https://github.com/qinguoyi/TinyWebServer) 的代码中拷贝下来进行了稍微的修改）
+  * 目前 GET 方法会忽略其附带参数
 
 ## To-Do
 
-- [ ] 加入 POST 方法
+- [x] 加入 POST 方法
 - [x] 提供 epoll 的 ET 与 LT 两种触发模式的选择
 - [ ] 提供 Reactor 与 Proactor 两种并发模型的选择
-- [ ] 加入数据库支持
+- [x] 加入数据库支持
+- [ ] 增加日志系统
+- [ ] 用定时器处理非活动连接
 
 ## Authors 关于作者
 
