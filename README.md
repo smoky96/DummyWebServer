@@ -59,11 +59,12 @@ $ make
 
 该程序为服务器压力测试程序，可用来测试服务器的并发性能，采用 I/O 复用技术，让多个 socket 不停的去发起请求。
 
-输入 ```bin/stress ip_address port_num connection_number``` 来运行 stress 程序，其中：
+输入 ```bin/stress hostname port_num connection_number time(sec)``` 来运行 stress 程序，其中：
 
-* ip_address 为本机 ip 地址
+* hostname 为请求的完整 url，如：http://www.website.com/，只支持 http 协议
 * port_num 为端口号
 * connection_number 为 socket 连接数量（最大值依系统参数而定，一般为 1021）
+* time 为请求持续时间，单位是秒
 
 ## History 版本历史
 
