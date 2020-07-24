@@ -116,6 +116,10 @@ class HttpConn {
   bool __AddBlankLine();
   /* 调整 __iov_ 内容 */
   void __AdjustIov();
+  /* 登录、注册、提取用户名密码 */
+  bool __Login(char* basename);
+  bool __Regist(char* basename);
+  bool __GetUserPasswd(char* username, char* passwd);
 };
 
 #endif  //!__HTTP_CONN__H__

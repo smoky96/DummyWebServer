@@ -297,59 +297,13 @@ HttpConn::HttpCode_ HttpConn::__DoRequest() {
   strncpy(__real_file_ + len - 1, buf, kFileNameLen_ - len);
 
   if (__method_ == POST) {
-    /* 提取 POST 参数 */
-    char username[100];
-    char password[100];
-    do {
-      char *tmp = strpbrk(&__read_buf[__cur_idx_], "=");
-      if (tmp == nullptr) {
-        username[0] = '\0';
-        break;
-      }
-      int i = 0;
-      for (; *(++tmp) != '&'; ++i) {
-        username[i] = *tmp;
-      }
-      username[i] = '\0';
-      tmp = strpbrk(tmp, "=");
-      if (tmp == nullptr) {
-        password[0] = '\0';
-        break;
-      }
-      for (i = 0; *(++tmp) != '\0'; ++i) {
-        password[i] = *tmp;
-      }
-      password[i] = '\0';
-    } while (0);
-
     char *basename = strrchr(__real_file_, '/');
     ++basename;
-    if (strcasecmp(basename, "sqllogin") == 0) {  // 登录按钮
-      if (users.find(username) != users.end() && users[username] == password)
-        strcpy(basename, "welcome.html");
-      else
-        strcpy(basename, "login_error.html");
-    } else if (strcasecmp(basename, "sqlregister") == 0) {  // 注册按钮
-      char sql_statement[300];
-      sprintf(sql_statement,
-              "INSERT INTO user(username, passwd) VALUES('%s', '%s')", username,
-              password);
-      if (users.count(username)) {
-        strcpy(basename, "register_error.html");
-      } else {
-        MYSQL *mysql;
-        ConnectionRaii conn(mysql);
-        locker.Lock();
-        int result = mysql_query(mysql, sql_statement);
-        users.insert(std::make_pair(username, password));
-        locker.Unlock();
-
-        if (!result)
-          strcpy(basename, "login.html");
-        else
-          strcpy(basename, "register_error.html");
-      }
-    } else if (strcasecmp(basename, "login") == 0) {  // 进入登录页面
+    if (strcmp(basename, "sqllogin") == 0) {
+      __Login(basename);
+    } else if (strcmp(basename, "sqlregister") == 0) {
+      __Regist(basename);
+    } else if (strcmp(basename, "login") == 0) {  // 进入登录页面
       strcpy(basename, "login.html");
     } else if (strcasecmp(basename, "register") == 0) {  // 进入注册页面
       strcpy(basename, "register.html");
@@ -378,6 +332,72 @@ HttpConn::HttpCode_ HttpConn::__DoRequest() {
       (char *)Mmap(NULL, __file_stat_.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   Close(fd);
   return FILE_REQUEST;
+}
+
+bool HttpConn::__Login(char *basename) {
+  /* 提取 POST 参数 */
+  char username[51];
+  char password[31];
+  if (!__GetUserPasswd(username, password)) return false;
+
+  if (users.find(username) != users.end() && users[username] == password) {
+    strcpy(basename, "welcome.html");
+    return true;
+  }
+  strcpy(basename, "login_error.html");
+  return false;
+}
+
+bool HttpConn::__Regist(char *basename) {
+  /* 提取 POST 参数 */
+  char username[51];
+  char password[31];
+  if (!__GetUserPasswd(username, password)) return false;
+
+  char sql_statement[300];
+  sprintf(sql_statement,
+          "INSERT INTO user(username, passwd) VALUES('%s', '%s')", username,
+          password);
+  if (users.count(username)) {
+    strcpy(basename, "register_error.html");
+    return false;
+  }
+  MYSQL *mysql;
+  ConnectionRaii conn(mysql);
+  locker.Lock();
+  int result = mysql_query(mysql, sql_statement);
+  users.insert(std::make_pair(username, password));
+  locker.Unlock();
+
+  if (!result) {
+    strcpy(basename, "login.html");
+    return true;
+  }
+  strcpy(basename, "register_error.html");
+  return false;
+}
+
+bool HttpConn::__GetUserPasswd(char *username, char *passwd) {
+  char *tmp = strpbrk(&__read_buf[__cur_idx_], "=");
+  if (tmp == nullptr) {
+    username[0] = '\0';
+    return false;
+  }
+  int i = 0;
+  for (; *(++tmp) != '&'; ++i) {
+    username[i] = *tmp;
+  }
+  username[i] = '\0';
+  tmp = strpbrk(tmp, "=");
+  if (tmp == nullptr) {
+    passwd[0] = '\0';
+    return false;
+  }
+  for (i = 0; *(++tmp) != '\0'; ++i) {
+    passwd[i] = *tmp;
+  }
+  passwd[i] = '\0';
+  return true;
 }
 
 /* 对内存映射区执行 munmap 操作 */
