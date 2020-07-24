@@ -13,7 +13,7 @@ int bytes = 0;
 int failed = 0;
 int conn_num = 1;
 
-void alarm_handler(int signal) { stop = true; }
+void alarm_handler(int) { stop = true; }
 
 void build_request(const char* url) {
   memset(request, '\0', sizeof(request));
