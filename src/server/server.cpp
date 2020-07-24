@@ -14,7 +14,7 @@ using std::unique_ptr;
 using std::vector;
 
 int main(int argc, char** argv) {
-  Config config("dong", "abcd1234", "test_db", 8, 1080, 8, ET);
+  Config config(argc, argv);
 
   DummyServer server(config);
 

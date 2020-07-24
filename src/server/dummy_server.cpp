@@ -1,5 +1,71 @@
 #include "dummy_server.h"
 
+Config::Config(int argc, char** argv) { ParseArg(argc, argv); }
+
+extern int optind, opterr, optopt;
+extern char* optarg;
+
+static struct option long_options[] = {
+    {"user", required_argument, NULL, 'u'},
+    {"passwd", required_argument, NULL, 'p'},
+    {"dbname", required_argument, NULL, 'd'},
+    {"sqlnum", required_argument, NULL, 's'},
+    {"port", required_argument, NULL, 'P'},
+    {"threadnum", required_argument, NULL, 't'},
+    {"trigger", required_argument, NULL, 'T'}};
+
+void Config::ParseArg(int argc, char** argv) {
+  int index;
+  int c = 0;
+  if (argc < 8) {
+    usage();
+    exit(-1);
+  }
+  while (EOF != (c = getopt_long(argc, argv, "u:p:d:s:P:t:T:", long_options,
+                                 &index))) {
+    switch (c) {
+      case 'u':
+        sql_user_ = optarg;
+        break;
+      case 'p':
+        sql_passwd_ = optarg;
+        break;
+      case 'd':
+        db_name_ = optarg;
+        break;
+      case 's':
+        sql_num_ = atoi(optarg);
+        break;
+      case 'P':
+        port_ = atoi(optarg);
+        break;
+      case 't':
+        thread_num_ = atoi(optarg);
+        break;
+      case 'T':
+        triger_mode_ = (TrigerMode)atoi(optarg);
+        break;
+      case '?':
+        fprintf(stderr, "Unknown option: %c\n", optopt);
+        usage();
+        exit(-1);
+        break;
+    }
+  }
+}
+
+void Config::usage() {
+  fprintf(stderr,
+          "server [option]...\n"
+          "   -u|--user       MySQL user name\n"
+          "   -p|--passwd     MySQL user password\n"
+          "   -d|--dbname     MySQL database name\n"
+          "   -s|--sqlnum     MySQL connection number of connection pool\n"
+          "   -P|--port       Server port\n"
+          "   -t|--threadnum  Number thread of thread pool\n"
+          "   -T|--trigger    Trigger mode of epoll, ET=0 LT=1\n");
+}
+
 static int __sig_sktpipefd_[2];  // 统一事件源，传输信号
 
 DummyServer::DummyServer(Config config)

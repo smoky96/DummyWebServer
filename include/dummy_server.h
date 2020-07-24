@@ -1,6 +1,8 @@
 #ifndef __DUMMY_SERVER__H__
 #define __DUMMY_SERVER__H__
 
+#include <getopt.h>
+
 #include <exception>
 #include <memory>
 #include <string>
@@ -26,21 +28,12 @@ class Config {
   int sql_num_;             // 连接池中的连接数量
   TrigerMode triger_mode_;  // epoll 触发模式
 
- public:
-  Config(const string& sql_user, const string& sql_passwd,
-         const string& db_name, int sql_num, int port = 8080,
-         int thread_num = 8, TrigerMode triger_mode = ET) {
-    port_ = port;
-    sql_user_ = sql_user;
-    sql_passwd_ = sql_passwd;
-    db_name_ = db_name;
-    sql_num_ = sql_num;
-    thread_num_ = thread_num;
-    triger_mode_ = triger_mode;
-  };
+  Config(int argc, char** argv);
   ~Config() {}
 
+ private:
   void ParseArg(int argc, char** argv);
+  static void usage();
 };
 
 class DummyServer {
