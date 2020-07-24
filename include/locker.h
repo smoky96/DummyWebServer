@@ -6,7 +6,7 @@
 
 #include <exception>
 
-#include "conmmon.h"
+#include "common.h"
 
 /* 封装信号类 */
 class Sem {

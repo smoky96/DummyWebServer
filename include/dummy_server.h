@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "conmmon.h"
+#include "common.h"
 #include "http_conn.h"
 #include "sql_connpool.h"
 #include "threadpool.h"
@@ -26,7 +26,7 @@ class Config {
   string sql_passwd_;       // 数据库密码
   string db_name_;          // 数据库名称
   int sql_num_;             // 连接池中的连接数量
-  TrigerMode triger_mode_;  // epoll 触发模式
+  TriggerMode trigger_mode_;  // epoll 触发模式
 
   Config(int argc, char** argv);
   ~Config() {}
@@ -48,7 +48,7 @@ class DummyServer {
   epoll_event __events_[MAX_EVENT_NUM];  // 触发事件数组
   int __epollfd_;                        // epoll 内核事件表描述符
   int __listenfd_;                       // 监听描述符
-  TrigerMode __triger_mode_;             // 触发模式，暂时只支持 ET
+  TriggerMode __trigger_mode_;             // 触发模式，暂时只支持 ET
 
   string __sql_user_;    // sql 用户名
   string __sql_passwd_;  // sql 密码
@@ -74,7 +74,7 @@ class DummyServer {
   /* get 方法 */
   int port() const { return __port_; }
   const char* root() const { return __root_; }
-  TrigerMode triger_mode() const { return __triger_mode_; };
+  TriggerMode trigger_mode() const { return __trigger_mode_; };
 
  private:
   void __AddClient();

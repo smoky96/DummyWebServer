@@ -1,4 +1,4 @@
-#include "conmmon.h"
+#include "common.h"
 #include "processpool.h"
 
 /* 处理客户 CGI 请求，可作为 Processpool 类的模板参数 */

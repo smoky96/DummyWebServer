@@ -1,5 +1,5 @@
-#ifndef __CONMMON__H__
-#define __CONMMON__H__
+#ifndef __COMMON__H__
+#define __COMMON__H__
 
 #include <arpa/inet.h>
 #include <errno.h>
@@ -22,7 +22,7 @@
 #define PRINT_ERRMSG(func, msg) printf("%s error: %s\n", #func, (msg))
 #define PRINT_ERRNO(func) printf("%s error: %s\n", #func, strerror(errno))
 
-enum TrigerMode { ET = 0, LT };
+enum TriggerMode { ET = 0, LT };
 
 int Fork();
 
@@ -102,14 +102,14 @@ int SetNonBlocking(int fd);
 
 /* 将文件描述符 fd 加入到 epoll 事件表中，监听读事件
  * one_shot: 是否采用 one-shot 行为，默认 false
- * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+ * trigger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
 void AddFd(int epollfd, int fd, bool one_shot = false,
-           TrigerMode triger_mode = ET);
+           TriggerMode trigger_mode = ET);
 
 /* 重设 one-shot，
  * ev 为附加监听事件，最终监听事件为 ev | EPOLLONESHOT | EPOLLRDHUP
- * triger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
-void ModFd(int epollfd, int fd, int ev, TrigerMode triger_mode = ET);
+ * trigger_mode: 触发模式，0 为 ET，1 为 LT，默认 ET */
+void ModFd(int epollfd, int fd, int ev, TriggerMode trigger_mode = ET);
 
 /* 从 epoll 事件表中删除 fd */
 void RemoveFd(int epollfd, int fd);
@@ -120,4 +120,4 @@ void AddSig(int signum, void (*handler)(int), bool restart = true);
 /* 发送错误信息 */
 void SendError(int connfd, const char* info);
 
-#endif  //!__CONMMON__H__
+#endif  //!__COMMON__H__

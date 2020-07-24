@@ -5,7 +5,7 @@
 #include <cassert>
 #include <vector>
 
-#include "conmmon.h"
+#include "common.h"
 #include "locker.h"
 
 using std::vector;

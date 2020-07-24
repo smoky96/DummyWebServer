@@ -1,6 +1,6 @@
 #include <netdb.h>
 
-#include "conmmon.h"
+#include "common.h"
 
 #define BUFSIZE 2048
 

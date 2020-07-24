@@ -4,7 +4,7 @@
 #include <map>
 #include <string>
 
-#include "conmmon.h"
+#include "common.h"
 #include "locker.h"
 #include "sql_connpool.h"
 
@@ -44,7 +44,7 @@ class HttpConn {
   ~HttpConn() {}
 
   /* 初始化新接收的连接 */
-  void Init(int sockfd, const sockaddr_in& addr, TrigerMode triger_mode = ET);
+  void Init(int sockfd, const sockaddr_in& addr, TriggerMode trigger_mode = ET);
   /* 关闭连接 */
   void CloseConn(bool real_close = true);
   /* 处理客户请求 */
@@ -85,7 +85,7 @@ class HttpConn {
   int __iov_cnt_;             // 被写内存块的数量
   int __bytes_to_send_;       // 待发送字节数
   int __bytes_have_sent_;     // 已发送字节数
-  TrigerMode __triger_mode_;  // epoll 触发模式
+  TriggerMode __trigger_mode_;  // epoll 触发模式
 
   string __sql_user_;
   string __sql_passwd_;

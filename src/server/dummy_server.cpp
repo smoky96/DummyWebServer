@@ -43,7 +43,7 @@ void Config::ParseArg(int argc, char** argv) {
         thread_num_ = atoi(optarg);
         break;
       case 'T':
-        triger_mode_ = (TrigerMode)atoi(optarg);
+        trigger_mode_ = (TriggerMode)atoi(optarg);
         break;
       case '?':
         fprintf(stderr, "Unknown option: %c\n", optopt);
@@ -75,7 +75,7 @@ DummyServer::DummyServer(Config config)
       __sql_passwd_(config.sql_passwd_),
       __db_name_(config.db_name_) {
   __port_ = config.port_;
-  __triger_mode_ = config.triger_mode_;
+  __trigger_mode_ = config.trigger_mode_;
   __sql_num = config.sql_num_;
 }
 
@@ -110,14 +110,14 @@ void DummyServer::__Listen() {
 
   /* 创建 epoll 内核事件表 */
   __epollfd_ = Epoll_create(5);
-  AddFd(__epollfd_, __listenfd_, false, __triger_mode_);
-  if (__triger_mode_ == ET) SetNonBlocking(__listenfd_);
+  AddFd(__epollfd_, __listenfd_, false, __trigger_mode_);
+  if (__trigger_mode_ == ET) SetNonBlocking(__listenfd_);
   HttpConn::epollfd_ = __epollfd_;
 
   /* 统一事件源 */
   Socketpair(AF_UNIX, SOCK_STREAM, 0, __sig_sktpipefd_);
   SetNonBlocking(__sig_sktpipefd_[1]);  // 非阻塞写
-  AddFd(__epollfd_, __sig_sktpipefd_[0], false, __triger_mode_);
+  AddFd(__epollfd_, __sig_sktpipefd_[0], false, __trigger_mode_);
   AddSig(SIGTERM, __SigHandler, false);
   AddSig(SIGINT, __SigHandler, false);
 
@@ -158,7 +158,7 @@ void DummyServer::Start() {
 void DummyServer::__AddClient() {
   struct sockaddr_in client_addr;
   socklen_t client_addrlen = sizeof(client_addr);
-  if (__triger_mode_ == ET) {
+  if (__trigger_mode_ == ET) {
     while (1) {
       int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
       if (connfd < 0) {

@@ -8,7 +8,7 @@ const char *ok_200_title = "OK";
 const char *error_400_title = "Bad Request";
 
 const char *error_400_form =
-    "Your request has bad syntax or is inherently impossible to staisfy.\n";
+    "Your request has bad syntax or is inherently impossible to satisfy.\n";
 
 const char *error_403_title = "Forbidden";
 
@@ -44,11 +44,11 @@ void HttpConn::CloseConn(bool real_close) {
 }
 
 void HttpConn::Init(int sockfd, const sockaddr_in &addr,
-                    TrigerMode triger_mode) {
+                    TriggerMode trigger_mode) {
   __sockfd_ = sockfd;
   __addr_ = addr;
-  __triger_mode_ = triger_mode;
-  AddFd(epollfd_, sockfd, true, __triger_mode_);
+  __trigger_mode_ = trigger_mode;
+  AddFd(epollfd_, sockfd, true, __trigger_mode_);
   ++user_cnt_;
   __Init();
 }
@@ -111,7 +111,7 @@ bool HttpConn::Read() {
   }
 
   int bytes_read = 0;
-  if (__triger_mode_ == ET) {
+  if (__trigger_mode_ == ET) {
     while (1) {
       bytes_read = Recv(__sockfd_, __read_buf + __read_idx_,
                         kReadBufSize_ - __read_idx_, 0);
@@ -424,17 +424,17 @@ void HttpConn::__AdjustIov() {
 bool HttpConn::Write() {
   int tmp = 0;
   if (__bytes_to_send_ == 0) {
-    ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+    ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
     __Init();
     return true;
   }
-  if (__triger_mode_ == ET) {
+  if (__trigger_mode_ == ET) {
     while (1) {
       tmp = Writev(__sockfd_, __iov_, __iov_cnt_);
       if (tmp < 0) {
         if (errno == EAGAIN) {
           /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
-          ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
+          ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
           return true;
         }
         __Unmap();
@@ -450,10 +450,10 @@ bool HttpConn::Write() {
         /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
         if (__linger_) {
           __Init();
-          ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+          ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
           return true;
         } else {
-          ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+          ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
           return false;
         }
       }
@@ -463,7 +463,7 @@ bool HttpConn::Write() {
     if (tmp < 0) {
       if (errno == EAGAIN) {
         /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
-        ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
+        ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
         return true;
       }
       __Unmap();
@@ -479,14 +479,14 @@ bool HttpConn::Write() {
       /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
       if (__linger_) {
         __Init();
-        ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+        ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
         return true;
       } else {
-        ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+        ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
         return false;
       }
     } else {
-      ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+      ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
       return true;
     }
   }
@@ -592,7 +592,7 @@ void HttpConn::Process() {
   HttpCode_ read_ret = __ProcessRead();
   if (read_ret == NO_REQUEST) {
     /* 还没收到完整请求，继续监听 */
-    ModFd(epollfd_, __sockfd_, EPOLLIN, __triger_mode_);
+    ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
     return;
   }
   bool write_ret = __ProcessWrite(read_ret);
@@ -601,7 +601,7 @@ void HttpConn::Process() {
     CloseConn();
   }
   /* 监听是否可写 */
-  ModFd(epollfd_, __sockfd_, EPOLLOUT, __triger_mode_);
+  ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
 }
 
 void HttpConn::InitSqlResult() {
