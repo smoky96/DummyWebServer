@@ -42,9 +42,9 @@ $ make
 * db_nmae: 数据库名称
 * sql_num: 连接池大小
 
-可以自己更改源代码以设置参数，注意使用前更改 src/server/server.cpp 文件中 main 函数的 root 变量，请改为自己的网站根目录，然后重新编译程序。
+注意使用前更改 src/server/http_conn.cpp 文件中 doc_root 变量，请改为自己的网站根目录，然后重新编译程序。
 
-输入 ```bin/server``` 运行 web 服务器程序
+输入 ```bin/server``` 查看参数及使用方法
 
 ### cgi 程序
 
