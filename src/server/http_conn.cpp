@@ -263,13 +263,13 @@ HttpConn::HttpCode_ HttpConn::__ProcessRead() {
           return BAD_REQUEST;
         }
         if (ret == GET_REQUEST) {
-          return __DoRequest();
+          return __DoRequest(text);
         }
         break;
       case CHECK_STATE_CONTENT:
         ret = __ParseContent(text);
         if (ret == GET_REQUEST) {
-          return __DoRequest();
+          return __DoRequest(text);
         }
         line_status = LINE_OPEN;
         break;
@@ -282,7 +282,7 @@ HttpConn::HttpCode_ HttpConn::__ProcessRead() {
 }
 
 /* 得到完整 HTTP 请求后，分析目标文件属性，将其映射到内存地址 __file_addr_ 处 */
-HttpConn::HttpCode_ HttpConn::__DoRequest() {
+HttpConn::HttpCode_ HttpConn::__DoRequest(char *text) {
   strcpy(__real_file_, doc_root);
   int len = strlen(doc_root);
   char buf[kFileNameLen_ - len];
@@ -305,8 +305,10 @@ HttpConn::HttpCode_ HttpConn::__DoRequest() {
       __Regist(basename);
     } else if (strcmp(basename, "login") == 0) {  // 进入登录页面
       strcpy(basename, "login.html");
-    } else if (strcasecmp(basename, "register") == 0) {  // 进入注册页面
+    } else if (strcmp(basename, "register") == 0) {  // 进入注册页面
       strcpy(basename, "register.html");
+    } else if (strcmp(basename, "run") == 0) {
+      return __RunPython(text);
     }
   }
 
@@ -398,6 +400,39 @@ bool HttpConn::__GetUserPasswd(char *username, char *passwd) {
   }
   passwd[i] = '\0';
   return true;
+}
+
+HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
+  int cgisockfd = Socket(AF_INET, SOCK_STREAM, 0);
+
+  struct sockaddr_in addr;
+  bzero(&addr, sizeof(addr));
+
+  addr.sin_port = htons(10801);
+  addr.sin_family = AF_INET;
+  struct hostent *he = gethostbyname("127.0.0.1");
+
+  memcpy(&(addr.sin_addr), he->h_addr_list[0], sizeof(in_addr));
+  if (Connect(cgisockfd, &addr, sizeof(addr)) < 0) {
+    exit(-1);
+  }
+  text = text + 7;
+  char len[32];
+  memset(len, '\0', sizeof(len));
+  sprintf(len, "%d\r\n", __content_length_ - 7);
+  char msg[kReadBufSize_];
+  memset(msg, '\0', sizeof(msg));
+  strcpy(msg, len);
+  strcat(msg, text);
+  int ret = -1;
+  ret = Send(cgisockfd, msg, __content_length_, 0);
+
+  int content_length = 0;
+  ret = Recv(cgisockfd, __cgiret_buf_ + content_length, kWriteBufSize, 0);
+  content_length += ret;
+  __cgiret_buf_[content_length] = '\0';
+  Close(cgisockfd);
+  return CGI_REQUEST;
 }
 
 /* 对内存映射区执行 munmap 操作 */
@@ -512,7 +547,7 @@ bool HttpConn::__AddResponse(const char *format, ...) {
 }
 
 bool HttpConn::__AddStatusLine(int status, const char *title) {
-  return __AddResponse("%s%d%s\r\n", "HTTP/1.1", status, title);
+  return __AddResponse("%s %d %s\r\n", "HTTP/1.1", status, title);
 }
 
 bool HttpConn::__AddHeaders(int content_len) {
@@ -577,6 +612,19 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
         if (!__AddContent(ok_string)) return false;
       }
       break;
+    case CGI_REQUEST: {
+      __AddStatusLine(200, ok_200_title);
+      int content_length = strlen(__cgiret_buf_);
+      __AddHeaders(content_length);
+      __iov_[0].iov_base = __write_buf_;
+      __iov_[0].iov_len = __write_idx_;
+      __iov_[1].iov_base = __cgiret_buf_;
+      __iov_[1].iov_len = content_length;
+      __bytes_to_send_ = __write_idx_ + content_length;
+      __iov_cnt_ = 2;
+      return true;
+      break;
+    }
     default:
       return false;
   }

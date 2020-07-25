@@ -3,10 +3,10 @@ CXXFLAGS	:= -std=c++17 -Wall -Wextra -g
 
 BIN		:= bin
 SRC		:= src
-INCLUDE	:= include
+INCLUDE	:= include /usr/include/python3.8
 LIB		:= lib
 
-LIBRARIES	:= -lrt -lpthread -lmysqlclient
+LIBRARIES	:= -lrt -lpthread -lmysqlclient -lpython3.8
 
 EXECUTABLE1	:= server
 EXECUTABLE2	:= cgi

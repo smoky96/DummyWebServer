@@ -240,7 +240,7 @@ ssize_t Send(int sockfd, const void* buf, size_t len, int flags) {
 /* 出错时返回 -1 */
 ssize_t Recv(int sockfd, void* buf, size_t len, int flags) {
   ssize_t ret = recv(sockfd, buf, len, flags);
-  if (ret < -1) {
+  if (ret < 0) {
     PRINT_ERRNO(recv);
   }
   return ret;

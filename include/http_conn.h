@@ -1,6 +1,8 @@
 #ifndef __HTTP_CONN__H__
 #define __HTTP_CONN__H__
 
+#include <netdb.h>
+
 #include <map>
 #include <string>
 
@@ -36,7 +38,8 @@ class HttpConn {
     FORBIDDEN_REQUEST,
     FILE_REQUEST,
     INTERNAL_ERROR,
-    CLOSED_CONNECTION
+    CLOSED_CONNECTION,
+    CGI_REQUEST
   };
 
  public:
@@ -47,7 +50,7 @@ class HttpConn {
   void Init(int sockfd, const sockaddr_in& addr, TriggerMode trigger_mode = ET);
   /* 关闭连接 */
   void CloseConn(bool real_close = true);
-  /* 处理客户请求 */
+  /* 处理客户请求, cgisockfd 为与网关连接的 socket */
   void Process();
   /* 非阻塞读 */
   bool Read();
@@ -80,12 +83,13 @@ class HttpConn {
   int __content_length_;             // HTTP 请求消息体的长度
   bool __linger_;                    // 是否保持连接
   char* __file_addr_;  // 客户端请求的目标文件在 mmap 的内存中的起始位置
-  struct stat __file_stat_;   // 目标文件的状态
-  struct iovec __iov_[2];     // 集中写
-  int __iov_cnt_;             // 被写内存块的数量
-  int __bytes_to_send_;       // 待发送字节数
-  int __bytes_have_sent_;     // 已发送字节数
-  TriggerMode __trigger_mode_;  // epoll 触发模式
+  struct stat __file_stat_;           // 目标文件的状态
+  struct iovec __iov_[2];             // 集中写
+  int __iov_cnt_;                     // 被写内存块的数量
+  int __bytes_to_send_;               // 待发送字节数
+  int __bytes_have_sent_;             // 已发送字节数
+  TriggerMode __trigger_mode_;        // epoll 触发模式
+  char __cgiret_buf_[kWriteBufSize];  // cgi 返回数据的缓冲区
 
   string __sql_user_;
   string __sql_passwd_;
@@ -102,7 +106,7 @@ class HttpConn {
   HttpCode_ __ParseRequestLine(char* text);
   HttpCode_ __ParseHeaders(char* text);
   HttpCode_ __ParseContent(char* text);
-  HttpCode_ __DoRequest();
+  HttpCode_ __DoRequest(char* text);
   inline char* __GetLine() { return __read_buf + __start_line_; }
   LineState_ __ParseLine();
   /* 以下一组函数由 __ProcessWrite() 调用以填充 HTTP 应答 */
@@ -120,6 +124,8 @@ class HttpConn {
   bool __Login(char* basename);
   bool __Regist(char* basename);
   bool __GetUserPasswd(char* username, char* passwd);
+  /* Python 在线环境 */
+  HttpCode_ __RunPython(char* text);
 };
 
 #endif  //!__HTTP_CONN__H__
