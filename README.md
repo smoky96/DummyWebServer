@@ -30,13 +30,13 @@ $ make
 
 ### server 程序
 
-该程序为服务器主程序，可以接收 HTTP 请求，并返回请求的文件。目前仅支持 GET 与 POST 方法，且 GET 请求的参数会被忽略（因为我不知道要怎么处理这个参数，也不知道这个参数有什么用），POST 是硬编码的，只支持代码中 root 文件夹下的网站。使用了 Proactor 并发模型、线程池、非阻塞 I/O 与 I/O 复用、数据库连接池等技术。
+运行此程序前请先运行 cgi 程序。该程序为服务器主程序，可以接收 HTTP 请求，并返回请求的文件。目前仅支持 GET 与 POST 方法，且 GET 请求的参数会被忽略（因为我不知道要怎么处理这个参数，也不知道这个参数有什么用），POST 是硬编码的，只支持代码中 root 文件夹下的网站。使用了 Proactor 并发模型、线程池、非阻塞 I/O 与 I/O 复用、数据库连接池等技术。
 
 目前可供选择的参数在 include/dummy_server.h 中的 Config 类中查看，有：
 
-* port: 端口号（默认为 8080）
-* thread_num: 线程数（默认为 8）
-* triger_mode: Epoll 触发模式（默认为 ET）
+* port: 端口号）
+* thread_num: 线程数
+* triger_mode: Epoll 触发模式
 * sql_user: 数据库用户名
 * sql_passwd: 数据库密码
 * db_nmae: 数据库名称
@@ -48,7 +48,7 @@ $ make
 
 ### cgi 程序
 
-该程序为简易的 CGI 程序，可接收请求程序的文件名，然后服务器执行程序后将结果返回给客户端。目前还未集成到服务器主程序中。使用了 Reactor 并发模型、进程池，以及 I/O 复用与非阻塞 I/O 等技术
+该程序为简易的 CGI 程序，可接收 python 源码，在服务端执行后将结果返回给客户端。使用了 Reactor 并发模型、进程池，以及 I/O 复用与非阻塞 I/O 等技术
 
 输入 ```bin/cgi ip_address port_num``` 来运行 CGI 程序，其中：
 
@@ -78,6 +78,11 @@ $ make
   * 加入了 ET 与 LT 两种触发模式的选择
   * 现已支持 POST 方法（都是硬编码的，只能支持代码文件中 root 目录下的网站，该网站从 [@qinguoyi](https://github.com/qinguoyi/TinyWebServer) 的代码中拷贝下来进行了稍微的修改）
   * 目前 GET 方法会忽略其附带参数
+* 2020.07.26
+  * 重写了 stress 程序，现在同时支持使用域名和 ip 地址进行测试
+  * 封装了 server 程序的参数处理，现在使用 server 程序需提供参数
+  * 重写了 CGI 程序，成为了一个在线 Python 解释器 CGI
+  * 加入了在线 Python 解释器页面
 
 ## To-Do
 
@@ -87,6 +92,7 @@ $ make
 - [x] 加入数据库支持
 - [ ] 增加日志系统
 - [ ] 用定时器处理非活动连接
+- [x] 整合 CGI 程序，加入在线 Python 解释器
 
 ## Authors 关于作者
 
