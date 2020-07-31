@@ -111,7 +111,6 @@ void DummyServer::__Listen() {
   /* 创建 epoll 内核事件表 */
   __epollfd_ = Epoll_create(5);
   AddFd(__epollfd_, __listenfd_, false, __trigger_mode_);
-  if (__trigger_mode_ == ET) SetNonBlocking(__listenfd_);
   HttpConn::epollfd_ = __epollfd_;
 
   /* 统一事件源 */

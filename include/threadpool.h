@@ -84,16 +84,14 @@ template <typename T>
 void Threadpool<T>::__Run() {
   while (!__stop_) {
     __jobs_stat_.Wait();
+    __jobs_locker_.Lock();
+    T* request = nullptr;
     if (!__jobs_.empty()) {
-      T* request = nullptr;
-      __jobs_locker_.Lock();
-      if (!__jobs_.empty()) {
-        request = __jobs_.front();
-        __jobs_.pop_front();
-      }
-      __jobs_locker_.Unlock();
-      if (request) request->Process();
+      request = __jobs_.front();
+      __jobs_.pop_front();
     }
+    __jobs_locker_.Unlock();
+    if (request) request->Process();
   }
 }
 
