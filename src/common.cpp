@@ -312,7 +312,7 @@ void ModFd(int epollfd, int fd, int ev, TriggerMode trigger_mode) {
 /* 从 epoll 事件表中删除 fd */
 void RemoveFd(int epollfd, int fd) {
   Epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, 0);
-  Close(fd);
+  shutdown(fd, SHUT_RDWR);
 }
 
 /* 设置捕获信号 */
