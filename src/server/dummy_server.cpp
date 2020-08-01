@@ -231,6 +231,7 @@ void DummyServer::__ReadFromClient(int sockfd) {
     __ResetTimer(sockfd);
     __pool_->Append(&__users_[sockfd]);
   } else {
+    __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
     __users_[sockfd].CloseConn();
   }
 }
@@ -240,6 +241,7 @@ void DummyServer::__WriteToClient(int sockfd) {
   /* 根据写的结果，决定是添加任务还是关闭连接 */
   if (!__users_[sockfd].Write()) {
     __ResetTimer(sockfd);
+    __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
     __users_[sockfd].CloseConn();
   }
 }
