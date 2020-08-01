@@ -2,7 +2,7 @@
 
 > 一个简易的 Web 服务器，仅用于学习
 
-一个简单的、带有详细注释的简易 Web 服务器，目前只支持 GET 方法，可以用自己的网站来测试（千万别投入实际使用，会有重大安全漏洞）
+一个简单的、带有详细注释的简易 Web 服务器，目前只支持 GET 和 POST 方法，可以用自己的网站来测试（完整支持 GET 方法，POST 方法是硬编码的）
 
 ## Getting Started
 
@@ -30,21 +30,19 @@ $ make
 
 ### server 程序
 
-运行此程序前请先运行 cgi 程序。该程序为服务器主程序，可以接收 HTTP 请求，并返回请求的文件。目前仅支持 GET 与 POST 方法，且 GET 请求的参数会被忽略（因为我不知道要怎么处理这个参数，也不知道这个参数有什么用），POST 是硬编码的，只支持代码中 root 文件夹下的网站。使用了 Proactor 并发模型、线程池、非阻塞 I/O 与 I/O 复用、数据库连接池等技术。
+使用前请先在服务器中建表（确保数据库中有 user 表，表中有 username 列和 passwd 列），运行此程序前请先运行 cgi 程序。该 server 程序为服务器主程序，可以接收 HTTP 请求，并返回请求的文件。目前仅支持 GET 与 POST 方法，且 GET 请求的参数会被忽略（因为我不知道要怎么处理这个参数，也不知道这个参数有什么用），POST 是硬编码的，只支持代码中 root 文件夹下的网站。使用了 Proactor 并发模型、线程池、非阻塞 I/O 与 I/O 复用、数据库连接池等技术。
 
-目前可供选择的参数在 include/dummy_server.h 中的 Config 类中查看，有：
+目前可供选择的参数在 include/dummy_server.h 中的 Config 类中查看，也可以输入 ```bin/server``` 查看参数及使用方法：
 
-* port: 端口号）
-* thread_num: 线程数
-* triger_mode: Epoll 触发模式
-* sql_user: 数据库用户名
-* sql_passwd: 数据库密码
-* db_nmae: 数据库名称
-* sql_num: 连接池大小
+* -u|--user         MySQL 数据库用户名
+* -p|--passwd       MySQL 数据库密码
+* -d|--db_name      MySQL 数据库名称
+* -s|--sql_num      数据库连接池大小
+* -P|--port         端口号
+* -t|--thread_num   线程数
+* -T|--trigger      Epoll 触发模式，0 为 ET，1 为 LT
 
-注意使用前更改 src/server/http_conn.cpp 文件中 doc_root 变量，请改为自己的网站根目录，然后重新编译程序。
-
-输入 ```bin/server``` 查看参数及使用方法
+注意使用前更改 src/server/http_conn.cpp 文件中 doc_root 变量，请改为自己的网站根目录，然后重新编译程序（默认使用 root 目录中的网站）。
 
 ### cgi 程序
 
@@ -83,6 +81,9 @@ $ make
   * 封装了 server 程序的参数处理，现在使用 server 程序需提供参数
   * 重写了 CGI 程序，成为了一个在线 Python 解释器 CGI
   * 加入了在线 Python 解释器页面
+* 2020.08.01
+  * 加入定时器处理非活动连接，可在 dummy_server.h 文件中更改 TIMEOUT 宏定义来自定义超时时间
+  * 修复 keep-alive 为 close 时，客户端无法继续读取数据的 bug
 
 ## To-Do
 
@@ -91,8 +92,9 @@ $ make
 - [ ] 提供 Reactor 与 Proactor 两种并发模型的选择
 - [x] 加入数据库支持
 - [ ] 增加日志系统
-- [ ] 用定时器处理非活动连接
+- [x] 用定时器处理非活动连接
 - [x] 整合 CGI 程序，加入在线 Python 解释器
+- [ ] 线程池动态调整大小
 
 ## Authors 关于作者
 
