@@ -12,20 +12,22 @@
 #include "http_conn.h"
 #include "sql_connpool.h"
 #include "threadpool.h"
+#include "timer.h"
 
 #define MAX_FD 65535         // 最大文件描述符
 #define MAX_EVENT_NUM 10000  // 最大事件数
+#define TIMEOUT 10           // 超时时间
 
 using std::vector;
 
 class Config {
  public:
-  int port_;                // 端口号
-  int thread_num_;          // 线程数
-  string sql_user_;         // 数据库用户名
-  string sql_passwd_;       // 数据库密码
-  string db_name_;          // 数据库名称
-  int sql_num_;             // 连接池中的连接数量
+  int port_;                  // 端口号
+  int thread_num_;            // 线程数
+  string sql_user_;           // 数据库用户名
+  string sql_passwd_;         // 数据库密码
+  string db_name_;            // 数据库名称
+  int sql_num_;               // 连接池中的连接数量
   TriggerMode trigger_mode_;  // epoll 触发模式
 
   Config(int argc, char** argv);
@@ -48,12 +50,15 @@ class DummyServer {
   epoll_event __events_[MAX_EVENT_NUM];  // 触发事件数组
   int __epollfd_;                        // epoll 内核事件表描述符
   int __listenfd_;                       // 监听描述符
-  TriggerMode __trigger_mode_;             // 触发模式，暂时只支持 ET
+  TriggerMode __trigger_mode_;           // 触发模式，暂时只支持 ET
 
   string __sql_user_;    // sql 用户名
   string __sql_passwd_;  // sql 密码
   string __db_name_;     // 数据库名称
   int __sql_num;         // 连接池中的连接数量
+
+  vector<TimerClientData> __timer_client_data;  // 定时器用的用户数据
+  TimerHeap __timer_heap_;                        // 堆定时器
 
   /* 信号处理函数，sig 为待处理信号，信号处理函数必须为静态 */
   static void __SigHandler(int sig);
@@ -83,6 +88,9 @@ class DummyServer {
   void __ReadFromClient(int sockfd);
   void __WriteToClient(int sockfd);
   void __SqlConnpool();
+  void __SetTimer(int sockfd, sockaddr_in client_addr);
+  static void __TimerCallback(TimerClientData* user_data);
+  void __ResetTimer(int sockfd);
 };
 
 #endif  //!__DUMMY_SERVER__H__

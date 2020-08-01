@@ -73,7 +73,9 @@ DummyServer::DummyServer(Config config)
       __pool_(new Threadpool<HttpConn>(config.thread_num_)),
       __sql_user_(config.sql_user_),
       __sql_passwd_(config.sql_passwd_),
-      __db_name_(config.db_name_) {
+      __db_name_(config.db_name_),
+      __timer_client_data(MAX_FD),
+      __timer_heap_(MAX_FD) {
   __port_ = config.port_;
   __trigger_mode_ = config.trigger_mode_;
   __sql_num = config.sql_num_;
@@ -119,6 +121,9 @@ void DummyServer::__Listen() {
   AddFd(__epollfd_, __sig_sktpipefd_[0], false, __trigger_mode_);
   AddSig(SIGTERM, __SigHandler, false);
   AddSig(SIGINT, __SigHandler, false);
+  AddSig(SIGALRM, __SigHandler, true);
+
+  alarm(TIMEOUT);
 
   /* 忽略 SIGPIPE 信号 */
   AddSig(SIGPIPE, SIG_IGN);
@@ -140,7 +145,8 @@ void DummyServer::Start() {
         /* 新连接 */
         __AddClient();
       } else if (__events_[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
-        /* 异常，关闭连接 */
+        /* 异常，移除定时器，关闭连接 */
+        __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
         __users_[sockfd].CloseConn();
       } else if ((sockfd == __sig_sktpipefd_[0]) &&
                  (__events_[i].events & EPOLLIN)) {
@@ -170,6 +176,8 @@ void DummyServer::__AddClient() {
       }
       /* 将新用户加入用户数组 */
       __users_[connfd].Init(connfd, client_addr);
+      /* 设置定时器 */
+      __SetTimer(connfd, client_addr);
     }
   } else {
     int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
@@ -183,6 +191,8 @@ void DummyServer::__AddClient() {
     }
     /* 将新用户加入用户数组 */
     __users_[connfd].Init(connfd, client_addr);
+    /* 设置定时器 */
+    __SetTimer(connfd, client_addr);
   }
 }
 
@@ -196,6 +206,10 @@ void DummyServer::__SignalProcess() {
   } else {
     for (int i = 0; i < ret; ++i) {
       switch (signals[i]) {
+        case SIGALRM:
+          __timer_heap_.Tick();
+          alarm(TIMEOUT);
+          break;
         case SIGTERM:
         case SIGINT:
           printf("Stop server now...\n");
@@ -214,6 +228,7 @@ void DummyServer::__ReadFromClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据读的结果，决定是添加任务还是关闭连接 */
   if (__users_[sockfd].Read()) {
+    __ResetTimer(sockfd);
     __pool_->Append(&__users_[sockfd]);
   } else {
     __users_[sockfd].CloseConn();
@@ -224,6 +239,7 @@ void DummyServer::__WriteToClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据写的结果，决定是添加任务还是关闭连接 */
   if (!__users_[sockfd].Write()) {
+    __ResetTimer(sockfd);
     __users_[sockfd].CloseConn();
   }
 }
@@ -232,4 +248,34 @@ void DummyServer::__SqlConnpool() {
   SqlConnpool::Init("localhost", __sql_user_, __sql_passwd_, __db_name_, 3306,
                     __sql_num);
   HttpConn::InitSqlResult();
+}
+
+/* 设置 TimerClientData 数据和定时器 */
+void DummyServer::__SetTimer(int sockfd, sockaddr_in client_addr) {
+  __timer_client_data[sockfd].addr = client_addr;
+  __timer_client_data[sockfd].epollfd = __epollfd_;
+  __timer_client_data[sockfd].sockfd = sockfd;
+  auto timer = std::make_shared<Timer>(TIMEOUT);
+  timer->user_data_ = &__timer_client_data[sockfd];
+  timer->cb_func_ = __TimerCallback;
+  __timer_client_data[sockfd].timer = timer;
+  __timer_heap_.AddTimer(timer);
+}
+
+void DummyServer::__TimerCallback(TimerClientData* timer_client_data) {
+  Epoll_ctl(timer_client_data->epollfd, EPOLL_CTL_DEL,
+            timer_client_data->sockfd, NULL);
+  Close(timer_client_data->sockfd);
+  --HttpConn::user_cnt_;
+}
+
+/* 若连接还是活动状态，则重设定时器 */
+void DummyServer::__ResetTimer(int sockfd) {
+  auto old_timer = __timer_client_data[sockfd].timer;
+  __timer_heap_.DelTimer(old_timer);
+  auto new_timer = std::make_shared<Timer>(TIMEOUT);
+  new_timer->user_data_ = old_timer->user_data_;
+  new_timer->cb_func_ = __TimerCallback;
+  __timer_client_data[sockfd].timer = new_timer;
+  __timer_heap_.AddTimer(new_timer);
 }
