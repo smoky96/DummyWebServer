@@ -5,13 +5,19 @@
 
 #include <map>
 #include <string>
+#include <vector>
 
 #include "common.h"
 #include "locker.h"
 #include "sql_connpool.h"
+#include "timer.h"
 
 using std::map;
 using std::string;
+using std::vector;
+
+extern vector<TimerClientData> g_timer_client_data;  // 定时器用的用户数据
+extern TimerHeap g_timer_heap;                       // 堆定时器
 
 class HttpConn {
  public:
@@ -50,7 +56,7 @@ class HttpConn {
   void Init(int sockfd, const sockaddr_in& addr, TriggerMode trigger_mode = ET);
   /* 关闭连接 */
   void CloseConn(bool real_close = true);
-  /* 处理客户请求, cgisockfd 为与网关连接的 socket */
+  /* 处理客户请求 */
   void Process();
   /* 非阻塞读 */
   bool Read();

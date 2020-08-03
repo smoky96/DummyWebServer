@@ -14,11 +14,10 @@
 #include "threadpool.h"
 #include "timer.h"
 
-#define MAX_FD 65535         // 最大文件描述符
-#define MAX_EVENT_NUM 10000  // 最大事件数
-#define TIMEOUT 10           // 超时时间
-
 using std::vector;
+
+extern vector<TimerClientData> g_timer_client_data;  // 定时器用的用户数据
+extern TimerHeap g_timer_heap;                       // 堆定时器
 
 class Config {
  public:
@@ -56,9 +55,6 @@ class DummyServer {
   string __sql_passwd_;  // sql 密码
   string __db_name_;     // 数据库名称
   int __sql_num;         // 连接池中的连接数量
-
-  vector<TimerClientData> __timer_client_data;  // 定时器用的用户数据
-  TimerHeap __timer_heap_;                        // 堆定时器
 
   /* 信号处理函数，sig 为待处理信号，信号处理函数必须为静态 */
   static void __SigHandler(int sig);

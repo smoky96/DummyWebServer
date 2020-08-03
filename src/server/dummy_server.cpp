@@ -1,5 +1,8 @@
 #include "dummy_server.h"
 
+vector<TimerClientData> g_timer_client_data(MAX_FD);  // 定时器用的用户数据
+TimerHeap g_timer_heap(MAX_FD);                       // 堆定时器
+
 Config::Config(int argc, char** argv) { ParseArg(argc, argv); }
 
 extern int optind, opterr, optopt;
@@ -73,9 +76,7 @@ DummyServer::DummyServer(Config config)
       __pool_(new Threadpool<HttpConn>(config.thread_num_)),
       __sql_user_(config.sql_user_),
       __sql_passwd_(config.sql_passwd_),
-      __db_name_(config.db_name_),
-      __timer_client_data(MAX_FD),
-      __timer_heap_(MAX_FD) {
+      __db_name_(config.db_name_) {
   __port_ = config.port_;
   __trigger_mode_ = config.trigger_mode_;
   __sql_num = config.sql_num_;
@@ -146,7 +147,6 @@ void DummyServer::Start() {
         __AddClient();
       } else if (__events_[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
         /* 异常，移除定时器，关闭连接 */
-        __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
         __users_[sockfd].CloseConn();
       } else if ((sockfd == __sig_sktpipefd_[0]) &&
                  (__events_[i].events & EPOLLIN)) {
@@ -207,7 +207,7 @@ void DummyServer::__SignalProcess() {
     for (int i = 0; i < ret; ++i) {
       switch (signals[i]) {
         case SIGALRM:
-          __timer_heap_.Tick();
+          g_timer_heap.Tick();
           alarm(TIMEOUT);
           break;
         case SIGTERM:
@@ -231,7 +231,6 @@ void DummyServer::__ReadFromClient(int sockfd) {
     __ResetTimer(sockfd);
     __pool_->Append(&__users_[sockfd]);
   } else {
-    __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
     __users_[sockfd].CloseConn();
   }
 }
@@ -241,7 +240,6 @@ void DummyServer::__WriteToClient(int sockfd) {
   /* 根据写的结果，决定是添加任务还是关闭连接 */
   if (!__users_[sockfd].Write()) {
     __ResetTimer(sockfd);
-    __timer_heap_.DelTimer(__timer_client_data[sockfd].timer);
     __users_[sockfd].CloseConn();
   }
 }
@@ -254,14 +252,14 @@ void DummyServer::__SqlConnpool() {
 
 /* 设置 TimerClientData 数据和定时器 */
 void DummyServer::__SetTimer(int sockfd, sockaddr_in client_addr) {
-  __timer_client_data[sockfd].addr = client_addr;
-  __timer_client_data[sockfd].epollfd = __epollfd_;
-  __timer_client_data[sockfd].sockfd = sockfd;
+  g_timer_client_data[sockfd].addr = client_addr;
+  g_timer_client_data[sockfd].epollfd = __epollfd_;
+  g_timer_client_data[sockfd].sockfd = sockfd;
   auto timer = std::make_shared<Timer>(TIMEOUT);
-  timer->user_data_ = &__timer_client_data[sockfd];
+  timer->user_data_ = &g_timer_client_data[sockfd];
   timer->cb_func_ = __TimerCallback;
-  __timer_client_data[sockfd].timer = timer;
-  __timer_heap_.AddTimer(timer);
+  g_timer_client_data[sockfd].timer = timer;
+  g_timer_heap.AddTimer(timer);
 }
 
 void DummyServer::__TimerCallback(TimerClientData* timer_client_data) {
@@ -273,11 +271,11 @@ void DummyServer::__TimerCallback(TimerClientData* timer_client_data) {
 
 /* 若连接还是活动状态，则重设定时器 */
 void DummyServer::__ResetTimer(int sockfd) {
-  auto old_timer = __timer_client_data[sockfd].timer;
-  __timer_heap_.DelTimer(old_timer);
+  auto old_timer = g_timer_client_data[sockfd].timer;
+  g_timer_heap.DelTimer(old_timer);
   auto new_timer = std::make_shared<Timer>(TIMEOUT);
   new_timer->user_data_ = old_timer->user_data_;
   new_timer->cb_func_ = __TimerCallback;
-  __timer_client_data[sockfd].timer = new_timer;
-  __timer_heap_.AddTimer(new_timer);
+  g_timer_client_data[sockfd].timer = new_timer;
+  g_timer_heap.AddTimer(new_timer);
 }

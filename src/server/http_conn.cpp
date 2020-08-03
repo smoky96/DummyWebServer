@@ -38,6 +38,7 @@ static Locker locker;              // 用户名数据加锁
 void HttpConn::CloseConn(bool real_close) {
   if (real_close && (__sockfd_ != -1)) {
     RemoveFd(epollfd_, __sockfd_);
+    g_timer_heap.DelTimer(g_timer_client_data[__sockfd_].timer);  // 删除定时器
     __sockfd_ = -1;
     --user_cnt_;
   }
@@ -647,6 +648,7 @@ void HttpConn::Process() {
   if (!write_ret) {
     /* 出错关闭连接 */
     CloseConn();
+    return;
   }
   /* 监听是否可写 */
   ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
