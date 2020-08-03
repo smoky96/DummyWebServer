@@ -34,13 +34,15 @@ $ make
 
 目前可供选择的参数在 include/dummy_server.h 中的 Config 类中查看，也可以输入 ```bin/server``` 查看参数及使用方法：
 
-* -u|--user         MySQL 数据库用户名
-* -p|--passwd       MySQL 数据库密码
-* -d|--db_name      MySQL 数据库名称
-* -s|--sql_num      数据库连接池大小
-* -P|--port         端口号
-* -t|--thread_num   线程数
-* -T|--trigger      Epoll 触发模式，0 为 ET，1 为 LT
+| 参数             | 说明                             |
+| ---------------- | -------------------------------- |
+| -u\|--user       | MySQL数据库用户名                |
+| -p\|--passwd     | MySQL 数据库密码                 |
+| -d\|--db_name    | MySQL 数据库名称                 |
+| -s\|--sql_num    | 数据库连接池大小                 |
+| -P\|--port       | 端口号                           |
+| -t\|--thread_num | 线程数                           |
+| -T\|--trigger    | Epoll 触发模式，0 为 ET，1 为 LT |
 
 注意使用前更改 src/server/http_conn.cpp 文件中 doc_root 变量，请改为自己的网站根目录，然后重新编译程序（默认使用 root 目录中的网站）。
 
@@ -59,7 +61,7 @@ $ make
 
 输入 ```bin/stress hostname port_num connection_number time(sec)``` 来运行 stress 程序，其中：
 
-* hostname 为请求的完整 url，如：http://www.website.com/，只支持 http 协议
+* hostname 为请求的完整 url，如：http://www.website.com/ ，只支持 http 协议
 * port_num 为端口号
 * connection_number 为 socket 连接数量（最大值依系统参数而定，一般为 1021）
 * time 为请求持续时间，单位是秒
@@ -82,7 +84,7 @@ $ make
   * 重写了 CGI 程序，成为了一个在线 Python 解释器 CGI
   * 加入了在线 Python 解释器页面
 * 2020.08.01
-  * 加入定时器处理非活动连接，可在 dummy_server.h 文件中更改 TIMEOUT 宏定义来自定义超时时间
+  * 加入定时器处理非活动连接，可在 common.h 文件中更改 TIMEOUT 宏定义来自定义超时时间
   * 修复 keep-alive 为 close 时，客户端无法继续读取数据的 bug
 
 ## To-Do
