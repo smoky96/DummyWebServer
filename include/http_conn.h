@@ -75,9 +75,12 @@ class HttpConn {
   int __sockfd_;                   // 该 HTTP 连接的 socket
   struct sockaddr_in __addr_;      // 客户端 socket 地址
   char __read_buf[kReadBufSize_];  // 读缓冲区
-  int __read_idx_;    // 已读客户数据的最后一个字节的下个位置
-  int __cur_idx_;     // 当前正在分析的字符位置
-  int __start_line_;  // 当前正在解析的行的起始位置
+  int __read_idx_;     // 已读客户数据的最后一个字节的下个位置
+  int __cur_idx_;      // 当前正在分析的字符位置
+  int __start_line_;   // 当前正在解析的行的起始位置
+  int __file_size_;    // 请求文件的总大小
+  int __range_start_;  // Range 参数，从哪里开始传
+  int __range_end_;    // Range 参数，到哪里结束
   char __write_buf_[kWriteBufSize];  // 写缓冲区
   int __write_idx_;                  // 写缓冲区中待发送的字节数
   CheckState_ __check_state_;        // 主状态机所处状态
@@ -122,6 +125,7 @@ class HttpConn {
   bool __AddStatusLine(int status, const char* title);
   bool __AddHeaders(int content_length);
   bool __AddContentLength(int content_length);
+  bool __AddContentRange();
   bool __AddLinger();
   bool __AddBlankLine();
   /* 调整 __iov_ 内容 */
