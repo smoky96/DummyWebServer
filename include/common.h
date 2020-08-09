@@ -21,7 +21,7 @@
 
 #define MAX_FD 65535         // 最大文件描述符
 #define MAX_EVENT_NUM 10000  // 最大事件数
-#define TIMEOUT 10           // 超时时间
+#define TIMEOUT 600          // 超时时间
 
 #define PRINT_ERRMSG(func, msg) printf("%s error: %s\n", #func, (msg))
 #define PRINT_ERRNO(func) printf("%s error: %s\n", #func, strerror(errno))

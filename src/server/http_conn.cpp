@@ -5,6 +5,8 @@
 /* 定义 HTTP 响应的状态信息 */
 const char *ok_200_title = "OK";
 
+const char *ok_206_title = "Partial Content";
+
 const char *error_400_title = "Bad Request";
 
 const char *error_400_form =
@@ -66,6 +68,9 @@ void HttpConn::__Init() {
   __cur_idx_ = 0;
   __read_idx_ = 0;
   __write_idx_ = 0;
+  __file_size_ = 0;
+  __range_start_ = 0;
+  __range_end_ = -1;
   __bytes_to_send_ = 0;
   __bytes_have_sent_ = 0;
   memset(__read_buf, '\0', kReadBufSize_);
@@ -226,6 +231,24 @@ HttpConn::HttpCode_ HttpConn::__ParseHeaders(char *text) {
     text += 5;
     text += strspn(text, " \t");
     __host_ = text;
+  } else if (strncasecmp(text, "Range:", 6) == 0) {
+    /* 处理 Range 字段 */
+    text += 6;
+    text += strspn(text, " \t");
+    text += strspn(text, "bytes=");
+    if (*text == '-') {
+      ++text;
+      __range_start_ = -1;
+      __range_end_ = atol(text);
+    } else {
+      __range_start_ = atol(text);
+      text += strcspn(text, "-") + 1;
+      if (*text == '\0') {
+        __range_end_ = -1;
+      } else {
+        __range_end_ = atol(text);
+      }
+    }
   } else {
     printf("unknown header: %s\n", text);
   }
@@ -331,6 +354,18 @@ HttpConn::HttpCode_ HttpConn::__DoRequest(char *text) {
     return BAD_REQUEST;
   }
   int fd = Open(__real_file_, O_RDONLY);
+  __file_size_ = __file_stat_.st_size;
+  if (__range_end_ == -1) {
+    __range_end_ = __file_size_ - 1;
+  } else if (__range_start_ == -1) {
+    __range_start_ = __file_size_ - __range_end_;
+    __range_end_ = __file_size_ - 1;
+  }
+  __range_end_ = __range_end_ >= __file_size_ ? __file_size_ - 1 : __range_end_;
+  if (__range_end_ - __range_start_ > 10485759) {  // 超过 10MB 分块传输
+    __range_end_ = __range_start_ + 10485759;
+  }
+
   __file_addr_ =
       (char *)Mmap(NULL, __file_stat_.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   Close(fd);
@@ -448,7 +483,8 @@ void HttpConn::__Unmap() {
 void HttpConn::__AdjustIov() {
   if (__bytes_have_sent_ >= __write_idx_) {
     __iov_[0].iov_len = 0;
-    __iov_[1].iov_base = __file_addr_ + (__bytes_have_sent_ - __write_idx_);
+    __iov_[1].iov_base =
+        __file_addr_ + __range_start_ + (__bytes_have_sent_ - __write_idx_);
     __iov_[1].iov_len = __bytes_to_send_;
   } else {
     __iov_[0].iov_base = __write_buf_ + __bytes_have_sent_;
@@ -553,6 +589,8 @@ bool HttpConn::__AddStatusLine(int status, const char *title) {
 
 bool HttpConn::__AddHeaders(int content_len) {
   if (!__AddContentLength(content_len)) return false;
+  if (!__AddAcceptRanges()) return false;
+  if (!__AddContentRange()) return false;
   if (!__AddLinger()) return false;
   if (!__AddBlankLine()) return false;
   return true;
@@ -560,6 +598,15 @@ bool HttpConn::__AddHeaders(int content_len) {
 
 bool HttpConn::__AddContentLength(int content_len) {
   return __AddResponse("Content-Length: %d\r\n", content_len);
+}
+
+bool HttpConn::__AddAcceptRanges() {
+  return __AddResponse("Accept-Range: bytes\r\n");
+}
+
+bool HttpConn::__AddContentRange() {
+  return __AddResponse("Content-Range: bytes %d-%d/%d\r\n", __range_start_,
+                       __range_end_, __file_size_);
 }
 
 bool HttpConn::__AddLinger() {
@@ -596,15 +643,20 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
       __AddHeaders(strlen(error_403_form));
       if (!__AddContent(error_403_form)) return false;
       break;
-    case FILE_REQUEST:
-      __AddStatusLine(200, ok_200_title);
-      if (__file_stat_.st_size != 0) {
-        __AddHeaders(__file_stat_.st_size);
+    case FILE_REQUEST: {
+      int send_file_size = __range_end_ - __range_start_ + 1;
+      if (send_file_size < __file_size_) {
+        __AddStatusLine(206, ok_206_title);
+      } else {
+        __AddStatusLine(200, ok_200_title);
+      }
+      if (send_file_size != 0) {
+        __AddHeaders(send_file_size);
         __iov_[0].iov_base = __write_buf_;
         __iov_[0].iov_len = __write_idx_;
-        __iov_[1].iov_base = __file_addr_;
-        __iov_[1].iov_len = __file_stat_.st_size;
-        __bytes_to_send_ = __write_idx_ + __file_stat_.st_size;
+        __iov_[1].iov_base = __file_addr_ + __range_start_;
+        __iov_[1].iov_len = send_file_size;
+        __bytes_to_send_ = __iov_[0].iov_len + __iov_[1].iov_len;
         __iov_cnt_ = 2;
         return true;
       } else {
@@ -612,7 +664,7 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
         __AddHeaders(strlen(ok_string));
         if (!__AddContent(ok_string)) return false;
       }
-      break;
+    } break;
     case CGI_REQUEST: {
       __AddStatusLine(200, ok_200_title);
       int content_length = strlen(__cgiret_buf_);
