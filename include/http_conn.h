@@ -125,6 +125,7 @@ class HttpConn {
   bool __AddStatusLine(int status, const char* title);
   bool __AddHeaders(int content_length);
   bool __AddContentLength(int content_length);
+  bool __AddAcceptRanges();
   bool __AddContentRange();
   bool __AddLinger();
   bool __AddBlankLine();
