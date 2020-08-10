@@ -22,10 +22,10 @@ extern TimerHeap g_timer_heap;                       // 堆定时器
 /* 描述映射到内存中的文件 */
 class File {
  public:
-  const char* addr_;       // 映射地址
+  char* addr_;             // 映射地址
   struct stat file_stat_;  // 文件详情
   File() : addr_(NULL){};
-  File(const char* addr, struct stat file_stat)
+  File(char* addr, struct stat file_stat)
       : addr_(addr), file_stat_(file_stat) {}
 };
 

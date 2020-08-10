@@ -338,12 +338,12 @@ HttpConn::HttpCode_ HttpConn::__DoRequest(char *text) {
     }
   }
 
-  if (__resources_.find(string(__real_file_)) == __resources_.end()) {
-    /* 尝试 default_page */
+  if (strcmp(__real_file_, "root/") == 0) {
+    /* 返回 default_page */
     strcat(__real_file_, default_page);
-    if (__resources_.find(string(__real_file_)) == __resources_.end()) {
-      return NO_RESOURCE;
-    }
+  }
+  if (__resources_.count(__real_file_) == 0) {
+    return NO_RESOURCE;
   }
   __request_file_ = &__resources_[__real_file_];
   if (!(__request_file_->file_stat_.st_mode & S_IROTH)) {
@@ -479,10 +479,10 @@ void HttpConn::ReleaseStaticResource() {
 
 /* 每次调用 writev 都需要调整 __iov_ */
 void HttpConn::__AdjustIov() {
-  if (__bytes_have_sent_ >= __write_idx_ && __request_file_ != NULL) {
+  if (__bytes_have_sent_ > __write_idx_) {
     __iov_[0].iov_len = 0;
-    __iov_[1].iov_base = (void *)(__request_file_->addr_ + __range_start_ +
-                                  (__bytes_have_sent_ - __write_idx_));
+    __iov_[1].iov_base = __request_file_->addr_ + __range_start_ +
+                         (__bytes_have_sent_ - __write_idx_);
     __iov_[1].iov_len = __bytes_to_send_;
   } else {
     __iov_[0].iov_base = __write_buf_ + __bytes_have_sent_;
@@ -650,7 +650,7 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
         __AddHeaders(send_file_size);
         __iov_[0].iov_base = __write_buf_;
         __iov_[0].iov_len = __write_idx_;
-        __iov_[1].iov_base = (void *)(__request_file_->addr_ + __range_start_);
+        __iov_[1].iov_base = __request_file_->addr_ + __range_start_;
         __iov_[1].iov_len = send_file_size;
         __bytes_to_send_ = __iov_[0].iov_len + __iov_[1].iov_len;
         __iov_cnt_ = 2;
@@ -741,7 +741,7 @@ void HttpConn::InitStaticResource(const char *root) {
       InitStaticResource((path + "/").c_str());
     } else if (dirp->d_type == DT_REG) {
       int fd = Open(path.c_str(), O_RDONLY);
-      const char *addr =
+      char *addr =
           (char *)Mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
       __resources_[path] = File(addr, file_stat);
       Close(fd);
