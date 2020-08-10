@@ -2,6 +2,7 @@
 #define __COMMON__H__
 
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -123,5 +124,9 @@ void AddSig(int signum, void (*handler)(int), bool restart = true);
 
 /* 发送错误信息 */
 void SendError(int connfd, const char* info);
+
+DIR* Opendir(const char* name);
+
+int Closedir(DIR* dirp);
 
 #endif  //!__COMMON__H__
