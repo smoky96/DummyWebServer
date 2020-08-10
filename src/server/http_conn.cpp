@@ -29,13 +29,15 @@ const char *error_500_form =
 
 /* 网站根目录 */
 const char *doc_root = "root/";
-const char *default_page = "/index.html";
+const char *default_page = "index.html";
 
 int HttpConn::user_cnt_ = 0;
 int HttpConn::epollfd_ = -1;
 
 static map<string, string> users;  // 所用用户名和密码
 static Locker locker;              // 用户名数据加锁
+
+map<string, File> HttpConn::__resources_;
 
 void HttpConn::CloseConn(bool real_close) {
   if (real_close && (__sockfd_ != -1)) {
@@ -68,7 +70,7 @@ void HttpConn::__Init() {
   __cur_idx_ = 0;
   __read_idx_ = 0;
   __write_idx_ = 0;
-  __file_size_ = 0;
+  __request_file_ = NULL;
   __range_start_ = 0;
   __range_end_ = -1;
   __bytes_to_send_ = 0;
@@ -336,39 +338,33 @@ HttpConn::HttpCode_ HttpConn::__DoRequest(char *text) {
     }
   }
 
-  if (Stat(__real_file_, &__file_stat_) < 0) {
-    return NO_RESOURCE;
-  }
-  /* 若请求未指定文件，则将目录下的 default_page 文件返回给客户端 */
-  if (S_ISDIR(__file_stat_.st_mode)) {
-    len = strlen(__real_file_);
-    strncpy(__real_file_ + len, default_page, kFileNameLen_ - len - 1);
-    if (Stat(__real_file_, &__file_stat_) < 0) {
+  if (__resources_.find(string(__real_file_)) == __resources_.end()) {
+    /* 尝试 default_page */
+    strcat(__real_file_, default_page);
+    if (__resources_.find(string(__real_file_)) == __resources_.end()) {
       return NO_RESOURCE;
     }
   }
-  if (!(__file_stat_.st_mode & S_IROTH)) {
+  __request_file_ = &__resources_[__real_file_];
+  if (!(__request_file_->file_stat_.st_mode & S_IROTH)) {
     return FORBIDDEN_REQUEST;
   }
-  if (S_ISDIR(__file_stat_.st_mode)) {
+  if (__request_file_->addr_ == NULL) {
     return BAD_REQUEST;
   }
-  int fd = Open(__real_file_, O_RDONLY);
-  __file_size_ = __file_stat_.st_size;
   if (__range_end_ == -1) {
-    __range_end_ = __file_size_ - 1;
+    __range_end_ = __request_file_->file_stat_.st_size - 1;
   } else if (__range_start_ == -1) {
-    __range_start_ = __file_size_ - __range_end_;
-    __range_end_ = __file_size_ - 1;
+    __range_start_ = __request_file_->file_stat_.st_size - __range_end_;
+    __range_end_ = __request_file_->file_stat_.st_size - 1;
   }
-  __range_end_ = __range_end_ >= __file_size_ ? __file_size_ - 1 : __range_end_;
+  __range_end_ = __range_end_ >= __request_file_->file_stat_.st_size
+                     ? __request_file_->file_stat_.st_size - 1
+                     : __range_end_;
   if (__range_end_ - __range_start_ > 10485759) {  // 超过 10MB 分块传输
     __range_end_ = __range_start_ + 10485759;
   }
 
-  __file_addr_ =
-      (char *)Mmap(NULL, __file_stat_.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  Close(fd);
   return FILE_REQUEST;
 }
 
@@ -471,20 +467,22 @@ HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
   return CGI_REQUEST;
 }
 
-/* 对内存映射区执行 munmap 操作 */
-void HttpConn::__Unmap() {
-  if (__file_addr_) {
-    Munmap(__file_addr_, __file_stat_.st_size);
-    __file_addr_ = nullptr;
+/* 释放缓存的资源 */
+void HttpConn::ReleaseStaticResource() {
+  for (auto it = __resources_.begin(); it != __resources_.end(); ++it) {
+    if (it->second.addr_) {
+      Munmap((void *)it->second.addr_, it->second.file_stat_.st_size);
+      it->second.addr_ = NULL;
+    }
   }
 }
 
 /* 每次调用 writev 都需要调整 __iov_ */
 void HttpConn::__AdjustIov() {
-  if (__bytes_have_sent_ >= __write_idx_) {
+  if (__bytes_have_sent_ >= __write_idx_ && __request_file_ != NULL) {
     __iov_[0].iov_len = 0;
-    __iov_[1].iov_base =
-        __file_addr_ + __range_start_ + (__bytes_have_sent_ - __write_idx_);
+    __iov_[1].iov_base = (void *)(__request_file_->addr_ + __range_start_ +
+                                  (__bytes_have_sent_ - __write_idx_));
     __iov_[1].iov_len = __bytes_to_send_;
   } else {
     __iov_[0].iov_base = __write_buf_ + __bytes_have_sent_;
@@ -509,7 +507,6 @@ bool HttpConn::Write() {
           ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
           return true;
         }
-        __Unmap();
         SendError(__sockfd_, "Internal write error");
         return false;
       }
@@ -518,7 +515,6 @@ bool HttpConn::Write() {
       __AdjustIov();
 
       if (__bytes_to_send_ <= 0) {
-        __Unmap();
         /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
         if (__linger_) {
           __Init();
@@ -538,7 +534,6 @@ bool HttpConn::Write() {
         ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
         return true;
       }
-      __Unmap();
       SendError(__sockfd_, "Internal write error");
       return false;
     }
@@ -547,7 +542,6 @@ bool HttpConn::Write() {
     __AdjustIov();
 
     if (__bytes_to_send_ <= 0) {
-      __Unmap();
       /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
       if (__linger_) {
         __Init();
@@ -605,8 +599,10 @@ bool HttpConn::__AddAcceptRanges() {
 }
 
 bool HttpConn::__AddContentRange() {
-  return __AddResponse("Content-Range: bytes %d-%d/%d\r\n", __range_start_,
-                       __range_end_, __file_size_);
+  if (__request_file_ != NULL)
+    return __AddResponse("Content-Range: bytes %d-%d/%d\r\n", __range_start_,
+                         __range_end_, __request_file_->file_stat_.st_size);
+  return true;
 }
 
 bool HttpConn::__AddLinger() {
@@ -645,7 +641,7 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
       break;
     case FILE_REQUEST: {
       int send_file_size = __range_end_ - __range_start_ + 1;
-      if (send_file_size < __file_size_) {
+      if (send_file_size < __request_file_->file_stat_.st_size) {
         __AddStatusLine(206, ok_206_title);
       } else {
         __AddStatusLine(200, ok_200_title);
@@ -654,7 +650,7 @@ bool HttpConn::__ProcessWrite(HttpCode_ ret) {
         __AddHeaders(send_file_size);
         __iov_[0].iov_base = __write_buf_;
         __iov_[0].iov_len = __write_idx_;
-        __iov_[1].iov_base = __file_addr_ + __range_start_;
+        __iov_[1].iov_base = (void *)(__request_file_->addr_ + __range_start_);
         __iov_[1].iov_len = send_file_size;
         __bytes_to_send_ = __iov_[0].iov_len + __iov_[1].iov_len;
         __iov_cnt_ = 2;
@@ -723,4 +719,33 @@ void HttpConn::InitSqlResult() {
   while (MYSQL_ROW row = mysql_fetch_row(result)) {
     users[row[0]] = row[1];
   }
+}
+
+void HttpConn::InitStaticResource(const char *root) {
+  DIR *dp;
+  dirent *dirp;
+  dp = Opendir(root);
+
+  while ((dirp = readdir(dp)) != NULL) {
+    if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0 ||
+        dirp->d_type == DT_LNK) {
+      continue;
+    }
+
+    string path = string(root) + dirp->d_name;
+    struct stat file_stat;
+    Stat(path.c_str(), &file_stat);
+    if (dirp->d_type == DT_DIR) {
+      /* 将目录放入也放入 __resources_ 中，若请求的是目录，则返回 BAD_REQUEST */
+      __resources_[path] = File(NULL, file_stat);
+      InitStaticResource((path + "/").c_str());
+    } else if (dirp->d_type == DT_REG) {
+      int fd = Open(path.c_str(), O_RDONLY);
+      const char *addr =
+          (char *)Mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+      __resources_[path] = File(addr, file_stat);
+      Close(fd);
+    }
+  }
+  Closedir(dp);
 }

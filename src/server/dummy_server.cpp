@@ -71,20 +71,23 @@ void Config::usage() {
 
 static int __sig_sktpipefd_[2];  // 统一事件源，传输信号
 
-DummyServer::DummyServer(Config config)
+DummyServer::DummyServer(const Config& config)
     : __users_(MAX_FD),
       __pool_(new Threadpool<HttpConn>(config.thread_num_)),
       __sql_user_(config.sql_user_),
       __sql_passwd_(config.sql_passwd_),
-      __db_name_(config.db_name_) {
-  __port_ = config.port_;
-  __trigger_mode_ = config.trigger_mode_;
-  __sql_num = config.sql_num_;
+      __db_name_(config.db_name_),
+      __port_(config.port_),
+      __trigger_mode_(config.trigger_mode_),
+      __sql_num(config.sql_num_) {
+  extern const char* doc_root;
+  HttpConn::InitStaticResource(doc_root);
 }
 
 DummyServer::~DummyServer() {
   Close(__epollfd_);
   Close(__listenfd_);
+  HttpConn::ReleaseStaticResource();
 }
 
 /* 信号处理函数，sig 为待处理信号 */
@@ -238,8 +241,9 @@ void DummyServer::__ReadFromClient(int sockfd) {
 void DummyServer::__WriteToClient(int sockfd) {
   /* Proactor 模式，父线程负责读写，子线程负责处理逻辑 */
   /* 根据写的结果，决定是添加任务还是关闭连接 */
-  if (!__users_[sockfd].Write()) {
+  if (__users_[sockfd].Write()) {
     __ResetTimer(sockfd);
+  } else {
     __users_[sockfd].CloseConn();
   }
 }

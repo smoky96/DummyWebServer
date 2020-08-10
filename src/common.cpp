@@ -331,3 +331,20 @@ void SendError(int connfd, const char* info) {
   Send(connfd, info, strlen(info), 0);
   Close(connfd);
 }
+
+DIR* Opendir(const char* name) {
+  DIR* dir;
+  if ((dir = opendir(name)) == NULL) {
+    PRINT_ERRNO(opendir);
+    exit(-1);
+  }
+  return dir;
+}
+
+int Closedir(DIR* dirp) {
+  if (closedir(dirp) < 0) {
+    PRINT_ERRNO(closedir);
+    exit(-1);
+  }
+  return 0;
+}

@@ -19,6 +19,16 @@ using std::vector;
 extern vector<TimerClientData> g_timer_client_data;  // 定时器用的用户数据
 extern TimerHeap g_timer_heap;                       // 堆定时器
 
+/* 描述映射到内存中的文件 */
+class File {
+ public:
+  const char* addr_;       // 映射地址
+  struct stat file_stat_;  // 文件详情
+  File() : addr_(NULL){};
+  File(const char* addr, struct stat file_stat)
+      : addr_(addr), file_stat_(file_stat) {}
+};
+
 class HttpConn {
  public:
   static const int kFileNameLen_ = 200;   // 文件名最大长度
@@ -64,6 +74,10 @@ class HttpConn {
   bool Write();
   /* 将用户名密码加载到内存 */
   static void InitSqlResult();
+  /* 将静态资源加载到内存 */
+  static void InitStaticResource(const char* root);
+  /* 释放缓存的资源 */
+  static void ReleaseStaticResource();
 
  public:
   /* epoll 内核事件表，所有 socket 事件都注册到同一个事件表，所以设为静态 */
@@ -78,21 +92,18 @@ class HttpConn {
   int __read_idx_;     // 已读客户数据的最后一个字节的下个位置
   int __cur_idx_;      // 当前正在分析的字符位置
   int __start_line_;   // 当前正在解析的行的起始位置
-  int __file_size_;    // 请求文件的总大小
   int __range_start_;  // Range 参数，从哪里开始传
   int __range_end_;    // Range 参数，到哪里结束
-  char __write_buf_[kWriteBufSize];  // 写缓冲区
-  int __write_idx_;                  // 写缓冲区中待发送的字节数
-  CheckState_ __check_state_;        // 主状态机所处状态
-  Method_ __method_;                 // 请求方法
-  char __real_file_[kFileNameLen_];  // 客户端请求目标完整路径
-  char* __url_;                      // 客户端请求目标的文件名
-  char* __version_;                  // HTTP 版本号，只支持 HTTP/1.1
-  char* __host_;                     // 主机名
-  int __content_length_;             // HTTP 请求消息体的长度
-  bool __linger_;                    // 是否保持连接
-  char* __file_addr_;  // 客户端请求的目标文件在 mmap 的内存中的起始位置
-  struct stat __file_stat_;           // 目标文件的状态
+  char __write_buf_[kWriteBufSize];   // 写缓冲区
+  int __write_idx_;                   // 写缓冲区中待发送的字节数
+  CheckState_ __check_state_;         // 主状态机所处状态
+  Method_ __method_;                  // 请求方法
+  char __real_file_[kFileNameLen_];   // 客户端请求目标完整路径
+  char* __url_;                       // 客户端请求目标的文件名
+  char* __version_;                   // HTTP 版本号，只支持 HTTP/1.1
+  char* __host_;                      // 主机名
+  int __content_length_;              // HTTP 请求消息体的长度
+  bool __linger_;                     // 是否保持连接
   struct iovec __iov_[2];             // 集中写
   int __iov_cnt_;                     // 被写内存块的数量
   int __bytes_to_send_;               // 待发送字节数
@@ -103,6 +114,9 @@ class HttpConn {
   string __sql_user_;
   string __sql_passwd_;
   string __sql_name_;
+
+  static map<string, File> __resources_;  // 静态资源
+  File* __request_file_;                  // 当前请求的文件
 
  private:
   /* 初始化连接 */
@@ -119,7 +133,6 @@ class HttpConn {
   inline char* __GetLine() { return __read_buf + __start_line_; }
   LineState_ __ParseLine();
   /* 以下一组函数由 __ProcessWrite() 调用以填充 HTTP 应答 */
-  void __Unmap();
   bool __AddResponse(const char* format, ...);
   bool __AddContent(const char* content);
   bool __AddStatusLine(int status, const char* title);

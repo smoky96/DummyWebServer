@@ -62,7 +62,7 @@ class DummyServer {
   volatile bool __stop_server_;
 
  public:
-  DummyServer(Config config);
+  explicit DummyServer(const Config& config);
   ~DummyServer();
 
   /* 不允许复制 */
