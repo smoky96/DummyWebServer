@@ -59,7 +59,7 @@ void SqlConnpool::__InitImp(const string& url, const string& user,
     conn = mysql_init(conn);
 
     if (conn == nullptr) {
-      PRINT_ERRMSG(mysql_init, "MySQL error");
+      LOGERR("mysql_init error");
       exit(-1);
     }
 
@@ -67,7 +67,7 @@ void SqlConnpool::__InitImp(const string& url, const string& user,
         mysql_real_connect(conn, url_.c_str(), user_.c_str(), passwd_.c_str(),
                            db_name_.c_str(), port, nullptr, 0);
     if (conn == nullptr) {
-      PRINT_ERRMSG(mysql_real_connect, "MySQL error");
+      LOGERR("mysql_real_connect error");
       exit(-1);
     }
     __conn_list_.push_back(conn);

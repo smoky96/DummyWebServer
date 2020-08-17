@@ -14,11 +14,14 @@ void PythonCgi::Process() {
   int ret = -1;
 
   while (1) {
-    ret = Recv(__sockfd_, __buf_ + __read_idx_, __kBufferSize_ - idx - 1, 0);
+    ret = recv(__sockfd_, __buf_ + __read_idx_, __kBufferSize_ - idx - 1, 0);
     if (ret < 0) {
       /* 若读操作发生错误，则关闭客户端连接；若无数据可读，退出循环 */
       if (errno != EAGAIN) {
-        RemoveFd(__epollfd_, __sockfd_);
+        LOGWARN("recv error");
+        if (RemoveFd(__epollfd_, __sockfd_) < 0) {
+          LOGWARN("RemoveFd error");
+        }
       }
       break;
     } else if (ret > 0) {
@@ -38,21 +41,30 @@ void PythonCgi::Process() {
         if (idx == __kBufferSize_ - 1) {
           char msg[] = "content overflow\n";
           printf("user content overflow\n");
-          Send(__sockfd_, msg, sizeof(msg), 0);
-          RemoveFd(__epollfd_, __sockfd_);
+          if (send(__sockfd_, msg, sizeof(msg), 0) < 0) {
+            LOGWARN("send error");
+          }
+          if (RemoveFd(__epollfd_, __sockfd_) < 0) {
+            LOGWARN("RemoveFd error");
+          }
           break;
         }
         continue;
       }
       ret = fork();
       if (ret == -1 || ret > 0) {
-        RemoveFd(__epollfd_, __sockfd_);
+        if (RemoveFd(__epollfd_, __sockfd_) < 0) {
+          LOGWARN("RemoveFd error");
+        }
         /* 一条请求处理完毕，重置缓存 */
         __ResetBuf();
         break;
       } else {
-        Dup2(__sockfd_, STDOUT_FILENO);
-        Dup2(__sockfd_, STDERR_FILENO);
+        if (dup2(__sockfd_, STDOUT_FILENO) < 0 ||
+            dup2(__sockfd_, STDERR_FILENO) < 0) {
+          LOGERR("dup2 error");
+          exit(-1);
+        }
         char decoded[__kBufferSize_];
         memset(decoded, '\0', sizeof(decoded));
         UrlDecode(__buf_ + idx + 1, decoded, __kBufferSize_);
@@ -60,7 +72,7 @@ void PythonCgi::Process() {
         exit(0);
       }
     } else {
-      RemoveFd(__epollfd_, __sockfd_);
+      if (RemoveFd(__epollfd_, __sockfd_) < 0) LOGWARN("RemoveFd error");
       break;
     }
   }

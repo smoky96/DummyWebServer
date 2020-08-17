@@ -16,7 +16,7 @@ class Sem {
  public:
   Sem(int pshared = 0, unsigned int value = 0) {
     if (sem_init(&__sem_, pshared, value) != 0) {
-      PRINT_ERRNO(sem_init);
+      LOGERR("sem_init error");
       throw std::exception();
     }
   }
@@ -35,7 +35,7 @@ class Locker {
  public:
   Locker() {
     if (pthread_mutex_init(&__mutex_, NULL) != 0) {
-      PRINT_ERRMSG(pthread_mutex_init, "something wrong");
+      LOGERR("pthread_mutex_init error");
       throw std::exception();
     }
   }
@@ -55,7 +55,7 @@ class Cond {
  public:
   Cond() {
     if (pthread_mutex_init(&__mutex_, NULL) != 0) {
-      PRINT_ERRMSG(pthread_mutex_init, "something wrong");
+      LOGERR("pthread_mutex_init error");
       throw std::exception();
     }
     if (pthread_cond_init(&__cond_, NULL) != 0) {
