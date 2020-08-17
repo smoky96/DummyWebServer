@@ -13,22 +13,35 @@ int main(int argc, char** argv) {
   const char* ip = argv[1];
   int port = atoi(argv[2]);
 
-  int listenfd = Socket(AF_INET, SOCK_STREAM, 0);
+  int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (listenfd < 0) {
+    LOGERR("socket error");
+    exit(-1);
+  }
   struct sockaddr_in addr;
   bzero(&addr, sizeof(addr));
   inet_pton(AF_INET, ip, &addr.sin_addr);
   addr.sin_port = htons(port);
   addr.sin_family = AF_INET;
 
-  Bind(listenfd, &addr, sizeof(addr));
+  if (bind(listenfd, (sockaddr*)&addr, sizeof(addr)) < 0) {
+    LOGERR("bind error");
+    exit(-1);
+  }
 
-  Listen(listenfd, 5);
+  if (listen(listenfd, 5) < 0) {
+    LOGERR("listen error");
+    exit(-1);
+  }
 
   Processpool<PythonCgi>* pool = Processpool<PythonCgi>::Create(listenfd);
   if (pool) {
     pool->Run();
   }
-  Close(listenfd);
+  if (close(listenfd) < 0) {
+    LOGERR("close error");
+    exit(-1);
+  }
 
   return 0;
 }

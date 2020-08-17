@@ -44,7 +44,7 @@ bool write_nbytes(int sockfd, const char* buffer, int len) {
   int bytes_write = 0;
   // printf("write out %d bytes to socket %d\n", len, sockfd);
   while (1) {
-    bytes_write = Send(sockfd, buffer, len, 0);
+    bytes_write = send(sockfd, buffer, len, 0);
     if (bytes_write < 0 || bytes_write == 0) return false;
     len -= bytes_write;
     buffer = buffer + bytes_write;
@@ -58,7 +58,7 @@ bool write_nbytes(int sockfd, const char* buffer, int len) {
 bool read_once(int sockfd, char* buffer, int len) {
   int bytes_read = 0;
   memset(buffer, '\0', len);
-  while ((bytes_read = Recv(sockfd, buffer, len, 0)) > 0) {
+  while ((bytes_read = recv(sockfd, buffer, len, 0)) > 0) {
     // printf("read in %d bytes from socket %d\n", bytes_read, sockfd);
     if (stop) return true;
     bytes += bytes_read;
@@ -80,16 +80,26 @@ void start_conn(int epollfd, int num, const char* host, int port) {
 
   int sockfd[num];
   for (int i = 0; i < num; ++i) {
-    sockfd[i] = Socket(AF_INET, SOCK_STREAM, 0);
-    if (Connect(sockfd[i], &addr, sizeof(addr)) < 0) {
+    sockfd[i] = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd[i] < 0) {
+      LOGERR("socket error");
+      exit(-1);
+    }
+    if (connect(sockfd[i], (sockaddr*)&addr, sizeof(addr)) < 0) {
       ++failed;
     }
     printf("connected %d of %d\n", i + 1, num);
     epoll_event event;
     event.data.fd = sockfd[i];
     event.events = EPOLLOUT | EPOLLET | EPOLLERR;
-    Epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd[i], &event);
-    SetNonBlocking(sockfd[i]);
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd[i], &event) < 0) {
+      LOGERR("epoll_ctl error");
+      exit(-1);
+    }
+    if (SetNonBlocking(sockfd[i]) < 0) {
+      LOGERR("SetNonBlocking error");
+      exit(-1);
+    }
   }
 }
 
@@ -100,7 +110,11 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  int epollfd = Epoll_create(5);
+  int epollfd = epoll_create(5);
+  if (epollfd < 0) {
+    LOGERR("epoll_create error");
+    exit(-1);
+  }
   epoll_event events[100000];
   char buffer[BUFSIZE];
 
@@ -115,7 +129,11 @@ int main(int argc, char** argv) {
   alarm(atoi(argv[4]));
 
   while (!stop) {
-    int n = Epoll_wait(epollfd, events, 100000, 2000);
+    int n = epoll_wait(epollfd, events, 100000, 2000);
+    if (n < 0 && (errno != EINTR)) {
+      LOGERR("epoll_wait error");
+      exit(-1);
+    }
     for (int i = 0; i < n; ++i) {
       int sockfd = events[i].data.fd;
       if (events[i].events & EPOLLIN) {
@@ -129,7 +147,10 @@ int main(int argc, char** argv) {
         epoll_event event;
         event.data.fd = sockfd;
         event.events = EPOLLOUT | EPOLLET | EPOLLERR;
-        Epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event);
+        if (epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event) < 0) {
+          LOGERR("epoll_ctl error");
+          exit(-1);
+        }
       } else if (events[i].events & EPOLLOUT) {
         if (!write_nbytes(sockfd, request, strlen(request))) {
           // RemoveFd(epollfd, sockfd);
@@ -142,7 +163,10 @@ int main(int argc, char** argv) {
         epoll_event event;
         event.data.fd = sockfd;
         event.events = EPOLLIN | EPOLLET | EPOLLERR;
-        Epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event);
+        if (epoll_ctl(epollfd, EPOLL_CTL_MOD, sockfd, &event) < 0) {
+          LOGERR("epoll_ctl error");
+          exit(-1);
+        }
       } else {
         // RemoveFd(epollfd, sockfd);
         ++failed;

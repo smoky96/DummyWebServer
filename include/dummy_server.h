@@ -28,6 +28,8 @@ class Config {
   string db_name_;            // 数据库名称
   int sql_num_;               // 连接池中的连接数量
   TriggerMode trigger_mode_;  // epoll 触发模式
+  bool verbose_;              // 是否输出信息
+  string log_path_;           // 日志位置
 
   Config(int argc, char** argv);
   ~Config() {}

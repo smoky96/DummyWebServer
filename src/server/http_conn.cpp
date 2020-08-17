@@ -41,7 +41,7 @@ map<string, File> HttpConn::__resources_;
 
 void HttpConn::CloseConn(bool real_close) {
   if (real_close && (__sockfd_ != -1)) {
-    RemoveFd(epollfd_, __sockfd_);
+    if (RemoveFd(epollfd_, __sockfd_) < 0) LOGWARN("RemoveFd error");
     g_timer_heap.DelTimer(g_timer_client_data[__sockfd_].timer);  // 删除定时器
     __sockfd_ = -1;
     --user_cnt_;
@@ -50,10 +50,14 @@ void HttpConn::CloseConn(bool real_close) {
 
 void HttpConn::Init(int sockfd, const sockaddr_in &addr,
                     TriggerMode trigger_mode) {
+  if (AddFd(epollfd_, sockfd, true, trigger_mode) < 0) {
+    LOGWARN("AddFd error");
+    if (close(sockfd) < 0) LOGERR("close error");
+    return;
+  }
   __sockfd_ = sockfd;
   __addr_ = addr;
   __trigger_mode_ = trigger_mode;
-  AddFd(epollfd_, sockfd, true, __trigger_mode_);
   ++user_cnt_;
   __Init();
 }
@@ -121,14 +125,16 @@ bool HttpConn::Read() {
   int bytes_read = 0;
   if (__trigger_mode_ == ET) {
     while (1) {
-      bytes_read = Recv(__sockfd_, __read_buf + __read_idx_,
+      bytes_read = recv(__sockfd_, __read_buf + __read_idx_,
                         kReadBufSize_ - __read_idx_, 0);
       if (bytes_read == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
           /* 非阻塞 */
           break;
         }
-        SendError(__sockfd_, "Internal read error");
+        LOGWARN("recv error");
+        if (SendError(__sockfd_, "Internal read error") < 0)
+          LOGWARN("SendError error");
         return false;
       } else if (bytes_read == 0) {
         /* 对方关闭连接 */
@@ -138,14 +144,16 @@ bool HttpConn::Read() {
       }
     }
   } else {
-    bytes_read = Recv(__sockfd_, __read_buf + __read_idx_,
+    bytes_read = recv(__sockfd_, __read_buf + __read_idx_,
                       kReadBufSize_ - __read_idx_, 0);
     if (bytes_read == -1) {
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
         /* 非阻塞 */
         return true;
       }
-      SendError(__sockfd_, "Internal read error");
+      LOGERR("recv error");
+      if (SendError(__sockfd_, "Internal read error") < 0)
+        LOGWARN("SendError error");
       return false;
     } else if (bytes_read == 0) {
       /* 对方关闭连接 */
@@ -252,7 +260,7 @@ HttpConn::HttpCode_ HttpConn::__ParseHeaders(char *text) {
       }
     }
   } else {
-    printf("unknown header: %s\n", text);
+    LOGINFO("unknown header: %s\n", text);
   }
   return NO_REQUEST;
 }
@@ -275,7 +283,7 @@ HttpConn::HttpCode_ HttpConn::__ProcessRead() {
          ((line_status = __ParseLine()) == LINE_OK)) {
     text = __GetLine();
     __start_line_ = __cur_idx_;
-    printf("got 1 http line: %s\n", text);
+    LOGINFO("got 1 http line: %s\n", text);
     switch (__check_state_) {
       case CHECK_STATE_REQUESTLINE:
         ret = __ParseRequestLine(text);
@@ -435,7 +443,11 @@ bool HttpConn::__GetUserPasswd(char *username, char *passwd) {
 }
 
 HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
-  int cgisockfd = Socket(AF_INET, SOCK_STREAM, 0);
+  int cgisockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (cgisockfd < 0) {
+    LOGERR("socket error");
+    exit(-1);
+  }
 
   struct sockaddr_in addr;
   bzero(&addr, sizeof(addr));
@@ -445,8 +457,9 @@ HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
   struct hostent *he = gethostbyname("127.0.0.1");
 
   memcpy(&(addr.sin_addr), he->h_addr_list[0], sizeof(in_addr));
-  if (Connect(cgisockfd, &addr, sizeof(addr)) < 0) {
-    exit(-1);
+  if (connect(cgisockfd, (sockaddr *)&addr, sizeof(addr)) < 0) {
+    LOGWARN("connect error");
+    return INTERNAL_ERROR;
   }
   text = text + 7;
   char len[32];
@@ -457,13 +470,24 @@ HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
   strcpy(msg, len);
   strcat(msg, text);
   int ret = -1;
-  ret = Send(cgisockfd, msg, __content_length_, 0);
+  ret = send(cgisockfd, msg, __content_length_, 0);
+  if (ret < 0) {
+    LOGWARN("send error");
+    return INTERNAL_ERROR;
+  }
 
   int content_length = 0;
-  ret = Recv(cgisockfd, __cgiret_buf_ + content_length, kWriteBufSize, 0);
+  ret = recv(cgisockfd, __cgiret_buf_ + content_length, kWriteBufSize, 0);
+  if (ret < 0) {
+    LOGWARN("recv error");
+    return INTERNAL_ERROR;
+  }
   content_length += ret;
   __cgiret_buf_[content_length] = '\0';
-  Close(cgisockfd);
+  if (close(cgisockfd) < 0) {
+    LOGERR("close error");
+    exit(-1);
+  }
   return CGI_REQUEST;
 }
 
@@ -471,7 +495,10 @@ HttpConn::HttpCode_ HttpConn::__RunPython(char *text) {
 void HttpConn::ReleaseStaticResource() {
   for (auto it = __resources_.begin(); it != __resources_.end(); ++it) {
     if (it->second.addr_) {
-      Munmap((void *)it->second.addr_, it->second.file_stat_.st_size);
+      if (munmap((void *)it->second.addr_, it->second.file_stat_.st_size) < 0) {
+        LOGERR("munmap error");
+        exit(-1);
+      }
       it->second.addr_ = NULL;
     }
   }
@@ -494,20 +521,28 @@ void HttpConn::__AdjustIov() {
 bool HttpConn::Write() {
   int tmp = 0;
   if (__bytes_to_send_ == 0) {
-    ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+    if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0) {
+      LOGWARN("ModFd error");
+      return false;
+    }
     __Init();
     return true;
   }
   if (__trigger_mode_ == ET) {
     while (1) {
-      tmp = Writev(__sockfd_, __iov_, __iov_cnt_);
+      tmp = writev(__sockfd_, __iov_, __iov_cnt_);
       if (tmp < 0) {
         if (errno == EAGAIN) {
           /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
-          ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
+          if (ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_) < 0) {
+            LOGWARN("ModFd error");
+            return false;
+          }
           return true;
         }
-        SendError(__sockfd_, "Internal write error");
+        LOGERR("writev error");
+        if (SendError(__sockfd_, "Internal write error") < 0)
+          LOGWARN("SendError error");
         return false;
       }
       __bytes_to_send_ -= tmp;
@@ -518,23 +553,32 @@ bool HttpConn::Write() {
         /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
         if (__linger_) {
           __Init();
-          ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+          if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0) {
+            LOGWARN("ModFd error");
+            return false;
+          }
           return true;
         } else {
-          ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+          if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0)
+            LOGWARN("ModFd error");
           return false;
         }
       }
     }
   } else {
-    tmp = Writev(__sockfd_, __iov_, __iov_cnt_);
+    tmp = writev(__sockfd_, __iov_, __iov_cnt_);
     if (tmp < 0) {
       if (errno == EAGAIN) {
         /* 若写缓冲区没有空间，则等待缓冲区可写，在此期间无法接收客户端请求 */
-        ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
+        if (ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_) < 0) {
+          LOGWARN("ModFd error");
+          return false;
+        }
         return true;
       }
-      SendError(__sockfd_, "Internal write error");
+      LOGERR("writev error");
+      if (SendError(__sockfd_, "Internal write error") < 0)
+        LOGWARN("SendError error");
       return false;
     }
     __bytes_to_send_ -= tmp;
@@ -545,14 +589,21 @@ bool HttpConn::Write() {
       /* HTTP 响应发送成功，根据 Connection 字段决定是否立即关闭连接 */
       if (__linger_) {
         __Init();
-        ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+        if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0) {
+          LOGWARN("ModFd error");
+          return false;
+        }
         return true;
       } else {
-        ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+        if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0)
+          LOGWARN("ModFd error");
         return false;
       }
     } else {
-      ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+      if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_) < 0) {
+        LOGWARN("ModFd error");
+        return false;
+      }
       return true;
     }
   }
@@ -689,7 +740,10 @@ void HttpConn::Process() {
   HttpCode_ read_ret = __ProcessRead();
   if (read_ret == NO_REQUEST) {
     /* 还没收到完整请求，继续监听 */
-    ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_);
+    if (ModFd(epollfd_, __sockfd_, EPOLLIN, __trigger_mode_)) {
+      LOGWARN("ModFd error");
+      CloseConn();
+    }
     return;
   }
   bool write_ret = __ProcessWrite(read_ret);
@@ -699,7 +753,10 @@ void HttpConn::Process() {
     return;
   }
   /* 监听是否可写 */
-  ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_);
+  if (ModFd(epollfd_, __sockfd_, EPOLLOUT, __trigger_mode_) < 0) {
+    LOGWARN("ModFd error");
+    CloseConn();
+  }
 }
 
 void HttpConn::InitSqlResult() {
@@ -709,7 +766,8 @@ void HttpConn::InitSqlResult() {
 
   /* 获取数据库中的用户名密码 */
   if (mysql_query(mysql, "SELECT username, passwd FROM user")) {
-    PRINT_ERRMSG(mysql_query, mysql_error(mysql));
+    LOGERR("mysql_query error: %s", mysql_error(mysql));
+    exit(-1);
   }
 
   /* 获取检索结果 */
@@ -724,7 +782,11 @@ void HttpConn::InitSqlResult() {
 void HttpConn::InitStaticResource(const char *root) {
   DIR *dp;
   dirent *dirp;
-  dp = Opendir(root);
+  dp = opendir(root);
+  if (dp == NULL) {
+    LOGERR("opendir error");
+    exit(-1);
+  }
 
   while ((dirp = readdir(dp)) != NULL) {
     if (strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0 ||
@@ -734,18 +796,35 @@ void HttpConn::InitStaticResource(const char *root) {
 
     string path = string(root) + dirp->d_name;
     struct stat file_stat;
-    Stat(path.c_str(), &file_stat);
+    if (stat(path.c_str(), &file_stat) < 0) {
+      LOGERR("stat error");
+      exit(-1);
+    }
     if (dirp->d_type == DT_DIR) {
       /* 将目录放入也放入 __resources_ 中，若请求的是目录，则返回 BAD_REQUEST */
       __resources_[path] = File(NULL, file_stat);
       InitStaticResource((path + "/").c_str());
     } else if (dirp->d_type == DT_REG) {
-      int fd = Open(path.c_str(), O_RDONLY);
+      int fd = open(path.c_str(), O_RDONLY);
+      if (fd < 0) {
+        LOGERR("open error");
+        exit(-1);
+      }
       char *addr =
-          (char *)Mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+          (char *)mmap(NULL, file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+      if (addr == MAP_FAILED) {
+        LOGERR("mmap error");
+        exit(-1);
+      }
       __resources_[path] = File(addr, file_stat);
-      Close(fd);
+      if (close(fd) < 0) {
+        LOGERR("close error");
+        exit(-1);
+      }
     }
   }
-  Closedir(dp);
+  if (closedir(dp) < 0) {
+    LOGERR("closedir error");
+    exit(-1);
+  }
 }

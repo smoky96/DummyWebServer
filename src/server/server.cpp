@@ -16,6 +16,9 @@ using std::vector;
 int main(int argc, char** argv) {
   Config config(argc, argv);
 
+  // 初始化 logger
+  Logger::Init(kInfo, config.log_path_, config.verbose_);
+
   DummyServer server(config);
 
   server.Start();

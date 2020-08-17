@@ -99,7 +99,10 @@ static void SigHandler(int sig) {
   // 保存 errno，防止在其他函数读取 errno 前触发了信号处理函数
   int errno_copy = errno;
   int msg = sig;
-  Send(sig_sktpipefd[1], (char*)&msg, 1, 0);
+  if (send(sig_sktpipefd[1], (char*)&msg, 1, 0) < 0) {
+    LOGERR("send error");
+    exit(-1);
+  }
   errno = errno_copy;
 }
 
@@ -118,15 +121,29 @@ Processpool<T>::Processpool(int listenfd, int process_number)
 
   /* 创建 process_number 个子进程 */
   for (int i = 0; i < process_number; ++i) {
-    Socketpair(AF_UNIX, SOCK_STREAM, 0, __sub_process_[i].sktpipefd);
-    __sub_process_[i].pid = Fork();
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, __sub_process_[i].sktpipefd) < 0) {
+      LOGERR("socketpair error");
+      exit(-1);
+    }
+    __sub_process_[i].pid = fork();
+    if (__sub_process_[i].pid < 0) {
+      LOGERR("fork error");
+      exit(-1);
+    }
+
     if (__sub_process_[i].pid > 0) {
       // 父进程
-      Close(__sub_process_[i].sktpipefd[1]);
+      if (close(__sub_process_[i].sktpipefd[1]) < 0) {
+        LOGERR("close error");
+        exit(-1);
+      }
       continue;
     } else {
       // 子进程
-      Close(__sub_process_[i].sktpipefd[0]);
+      if (close(__sub_process_[i].sktpipefd[0]) < 0) {
+        LOGERR("close error");
+        exit(-1);
+      }
       __idx_ = i;
       break;
     }
@@ -136,15 +153,30 @@ Processpool<T>::Processpool(int listenfd, int process_number)
 /* 统一事件源 */
 template <typename T>
 void Processpool<T>::__Setup() {
-  __epollfd_ = Epoll_create(5);
-  Socketpair(AF_UNIX, SOCK_STREAM, 0, sig_sktpipefd);
-  SetNonBlocking(sig_sktpipefd[1]);
-  AddFd(__epollfd_, sig_sktpipefd[0]);  // 监听 sig_sktpipedfd[0] 的读事件
+  __epollfd_ = epoll_create(5);
+  if (__epollfd_ < 0) {
+    LOGERR("epoll_create error");
+    exit(-1);
+  }
+  if (socketpair(AF_UNIX, SOCK_STREAM, 0, sig_sktpipefd) < 0) {
+    LOGERR("socketpair error");
+    exit(-1);
+  }
+  if (SetNonBlocking(sig_sktpipefd[1]) < 0) {
+    LOGERR("SetNonBlocking error");
+    exit(-1);
+  }
+  /* 监听 sig_sktpipedfd[0] 的读事件 */
+  if (AddFd(__epollfd_, sig_sktpipefd[0]) < 0) {
+    LOGERR("AddFd error");
+    exit(-1);
+  }
   /* 设置信号处理函数，将接收到的信号全部发送到 sig_sktpipefd[1] */
-  AddSig(SIGCHLD, SigHandler);
-  AddSig(SIGTERM, SigHandler);
-  AddSig(SIGINT, SigHandler);
-  AddSig(SIGPIPE, SIG_IGN);  // 忽略 SIGPIPE 信号，防止进程被终止
+  if (AddSig(SIGCHLD, SigHandler) < 0 || AddSig(SIGTERM, SigHandler) < 0 ||
+      AddSig(SIGINT, SigHandler) < 0 || AddSig(SIGPIPE, SIG_IGN) < 0) {
+    LOGERR("AddSig error");
+    exit(-1);
+  }
 }
 
 template <typename T>
@@ -165,28 +197,43 @@ void Processpool<T>::__RunChild() {
   int sktpipefd = __sub_process_[__idx_].sktpipefd[1];
 
   /* 监听从父进程发来的消息，父进程会通过这个管道来通知子进程 accept 新连接 */
-  AddFd(__epollfd_, sktpipefd);
+  if (AddFd(__epollfd_, sktpipefd) < 0) {
+    LOGERR("AddFd error");
+    exit(-1);
+  }
 
   epoll_event events[kMaxEventNum];
   vector<T> users(kUserPerProcess);
   int n_events = 0;
   int ret = -1;
   while (!__stop_) {
-    n_events = Epoll_wait(__epollfd_, events, kMaxEventNum, -1);
+    n_events = epoll_wait(__epollfd_, events, kMaxEventNum, -1);
+    if (n_events < 0 && (errno != EINTR)) {
+      LOGERR("epoll_wait error");
+      exit(-1);
+    }
     for (int i = 0; i < n_events; ++i) {
       int sockfd = events[i].data.fd;
       if (sockfd == sktpipefd && (events[i].events & EPOLLIN)) {  // 接收新连接
         int client = 0;
         /* 读取成功表示有新客户端 */
-        ret = Recv(sockfd, &client, sizeof(client), 0);
-        if (((ret < 0) && (errno != EAGAIN)) || ret == 0) {
+        ret = recv(sockfd, &client, sizeof(client), 0);
+        if (ret <= 0) {
+          if (ret < 0 && errno != EAGAIN) {
+            LOGWARN("recv error");
+          }
           continue;
         } else {
           struct sockaddr_in client_addr;
           socklen_t client_addrlen = sizeof(client_addr);
-          int connfd = Accept(__listenfd_, &client_addr, &client_addrlen);
+          int connfd =
+              accept(__listenfd_, (sockaddr*)&client_addr, &client_addrlen);
           if (connfd < 0) continue;
-          AddFd(__epollfd_, connfd);
+          if (AddFd(__epollfd_, connfd) < 0) {
+            LOGWARN("AddFd error");
+            if (close(connfd)) LOGERR("close errro");
+            continue;
+          }
           /* 逻辑处理类 T 需要实现 Init 方法来初始化一个客户端连接
            * 使用 connfd来索引逻辑处理对象 */
           users[connfd].Init(__epollfd_, connfd, client_addr);
@@ -194,8 +241,14 @@ void Processpool<T>::__RunChild() {
       } else if (sockfd == sig_sktpipefd[0] &&
                  (events[i].events & EPOLLIN)) {  // 接收到信号
         char signals[1024];
-        ret = Recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
-        if (ret <= 0) continue;
+        ret = recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
+        if (ret <= 0) {
+          if (ret < 0 && errno != EAGAIN) {
+            LOGERR("recv error");
+            exit(-1);
+          }
+          continue;
+        }
         for (int i = 0; i < ret; ++i) {
           switch (signals[i]) {
             case SIGCHLD: {
@@ -217,8 +270,10 @@ void Processpool<T>::__RunChild() {
       }
     }
   }
-  Close(sktpipefd);
-  Close(__epollfd_);
+  if (close(sktpipefd) < 0 || close(__epollfd_) < 0) {
+    LOGERR("close error");
+    exit(-1);
+  }
   // Close(__listenfd_); listenfd 应该由其创建者来关闭
 }
 
@@ -226,7 +281,10 @@ template <typename T>
 void Processpool<T>::__RunParent() {
   __Setup();
   /* 父进程监听 __listenfd_ */
-  AddFd(__epollfd_, __listenfd_);
+  if (AddFd(__epollfd_, __listenfd_) < 0) {
+    LOGERR("AddFd error");
+    exit(-1);
+  }
   epoll_event events[kMaxEventNum];
 
   int sub_process_cnt = 0;
@@ -234,7 +292,11 @@ void Processpool<T>::__RunParent() {
   int n_events = 0;
   int ret = -1;
   while (!__stop_) {
-    n_events = Epoll_wait(__epollfd_, events, kMaxEventNum, -1);
+    n_events = epoll_wait(__epollfd_, events, kMaxEventNum, -1);
+    if (n_events < 0 && (errno != EINTR)) {
+      LOGERR("epoll_wait error");
+      exit(-1);
+    }
     for (int i = 0; i < n_events; ++i) {
       int sockfd = events[i].data.fd;
       if (sockfd == __listenfd_) {  // 有新连接
@@ -254,13 +316,23 @@ void Processpool<T>::__RunParent() {
 
         sub_process_cnt = (i + 1) % __process_number_;
 
-        Send(__sub_process_[i].sktpipefd[0], &new_conn, sizeof(new_conn), 0);
+        if (send(__sub_process_[i].sktpipefd[0], &new_conn, sizeof(new_conn),
+                 0) < 0) {
+          LOGERR("send error");
+          exit(-1);
+        }
         printf("send request to child %d\n", i);
       } else if (sockfd == sig_sktpipefd[0] &&
                  (events[i].events & EPOLLIN)) {  // 接收信号
         char signals[1024];
-        ret = Recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
-        if (ret <= 0) continue;
+        ret = recv(sig_sktpipefd[0], signals, sizeof(signals), 0);
+        if (ret <= 0) {
+          if (ret < 0 && errno != EAGAIN) {
+            LOGERR("recv error");
+            exit(-1);
+          }
+          continue;
+        }
         for (int i = 0; i < ret; ++i) {
           switch (signals[i]) {
             case SIGCHLD: {
@@ -271,7 +343,10 @@ void Processpool<T>::__RunParent() {
                   /* 若第 i 个子进程退出，则关闭信号接收管道，将 pid 置为 -1 */
                   if (__sub_process_[i].pid == pid) {
                     printf("child %d: killed\n", i);
-                    Close(__sub_process_[i].sktpipefd[0]);
+                    if (close(__sub_process_[i].sktpipefd[0]) < 0) {
+                      LOGERR("close error");
+                      exit(-1);
+                    }
                     __sub_process_[i].pid = -1;
                   }
                 }
@@ -293,7 +368,10 @@ void Processpool<T>::__RunParent() {
               for (int i = 0; i < __process_number_; ++i) {
                 pid_t pid = __sub_process_[i].pid;
                 if (pid != -1) {
-                  Kill(pid, SIGTERM);
+                  if (kill(pid, SIGTERM) < 0) {
+                    LOGERR("kill error");
+                    exit(-1);
+                  }
                 }
               }
               break;
