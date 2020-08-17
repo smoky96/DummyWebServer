@@ -43,6 +43,8 @@ $ make
 | -P\|--port       | 端口号                           |
 | -t\|--thread_num | 线程数                           |
 | -T\|--trigger    | Epoll 触发模式，0 为 ET，1 为 LT |
+| -v\|--verbose    | 在标准输出中输出信息             |
+| -L\|--logpath    | 日志路径                         |
 
 注意使用前更改 src/server/http_conn.cpp 文件中 doc_root 变量，请改为自己的网站根目录，然后重新编译程序（默认使用 root 目录中的网站）。
 
@@ -86,6 +88,9 @@ $ make
 * 2020.08.01
   * 加入定时器处理非活动连接，可在 common.h 文件中更改 TIMEOUT 宏定义来自定义超时时间
   * 修复 keep-alive 为 close 时，客户端无法继续读取数据的 bug
+* 2020.08.17
+  * 增加了异步日志，采用了 Linux 的异步 IO
+  * 移除了对系统调用的封装
 
 ## To-Do
 
@@ -93,7 +98,7 @@ $ make
 - [x] 提供 epoll 的 ET 与 LT 两种触发模式的选择
 - [ ] 提供 Reactor 与 Proactor 两种并发模型的选择
 - [x] 加入数据库支持
-- [ ] 增加日志系统
+- [x] 增加异步日志系统
 - [x] 用定时器处理非活动连接
 - [x] 整合 CGI 程序，加入在线 Python 解释器
 - [ ] 线程池动态调整大小
