@@ -27,7 +27,7 @@ void Logger::__InitImp(LogLevel loglev, string& file_path, bool verbose) {
 
   std::ostringstream fp;
   fp << file_path << "/" << 1900 + tm_res.tm_year << std::right
-     << std::setfill('0') << "-" << std::setw(2) << 0 + tm_res.tm_mon << "-"
+     << std::setfill('0') << "-" << std::setw(2) << 1 + tm_res.tm_mon << "-"
      << std::setw(2) << tm_res.tm_mday << "_" << std::setw(2) << tm_res.tm_hour
      << "-" << std::setw(2) << tm_res.tm_min << "-" << std::setw(2)
      << tm_res.tm_sec;
@@ -86,20 +86,25 @@ void Logger::__WriteLog(LogLevel loglev, const char* file, int line,
   localtime_r(&now, &tm_res);
 
   if (loglev == kError) {
-    sprintf(
-        logmsg, "[%d-%02d-%02d %02d:%02d:%02d][%s] %s - line: %d - %s: %s (%s)",
-        1900 + tm_res.tm_year, 1 + tm_res.tm_mon, tm_res.tm_mday,
-        tm_res.tm_hour, tm_res.tm_min, tm_res.tm_sec,
-        __level_str_[loglev].c_str(), file, line, func, msg, strerror(errno));
+    sprintf(logmsg,
+            "[%d-%02d-%02d %02d:%02d:%02d][%s] %s - line: %d - %s: %s (%s)\n",
+            1900 + tm_res.tm_year, 1 + tm_res.tm_mon, tm_res.tm_mday,
+            tm_res.tm_hour, tm_res.tm_min, tm_res.tm_sec,
+            __level_str_[loglev].c_str(), file, line, func, msg,
+            strerror(errno));
   } else {
-    sprintf(logmsg, "[%d-%02d-%02d %02d:%02d:%02d][%s] %s - line: %d - %s: %s",
+    sprintf(logmsg,
+            "[%d-%02d-%02d %02d:%02d:%02d][%s] %s - line: %d - %s: %s\n",
             1900 + tm_res.tm_year, 1 + tm_res.tm_mon, tm_res.tm_mday,
             tm_res.tm_hour, tm_res.tm_min, tm_res.tm_sec,
             __level_str_[loglev].c_str(), file, line, func, msg);
   }
 
   if (__verbose_) {
-    write(STDOUT_FILENO, logmsg, strlen(logmsg));
+    if (write(STDOUT_FILENO, logmsg, strlen(logmsg)) < 0) {
+      perror("write error");
+      exit(-1);
+    }
   }
 
   if (__loglev_ <= loglev) {

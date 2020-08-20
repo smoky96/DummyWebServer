@@ -252,9 +252,8 @@ void Processpool<T>::__RunChild() {
         for (int i = 0; i < ret; ++i) {
           switch (signals[i]) {
             case SIGCHLD: {
-              pid_t pid;
               int stat;
-              while ((pid == waitpid(-1, &stat, WNOHANG)) > 0) continue;
+              while (waitpid(-1, &stat, WNOHANG) > 0) continue;
               break;
             }
             case SIGTERM:

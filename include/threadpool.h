@@ -49,7 +49,7 @@ Threadpool<T>::Threadpool(int thread_number, int max_request)
   assert((thread_number > 0) && (max_request > 0));
 
   for (int i = 0; i < thread_number; ++i) {
-    LOGINFO("create thread no.%d\n", i);
+    LOGINFO("create thread no.%d", i);
     /* worker 只能为静态函数，而静态函数需要用到类中成员，所以传递 this 指针 */
     if (pthread_create(&__threads_[i], NULL, __Worker, this) < 0) {
       LOGERR("pthread_create error");

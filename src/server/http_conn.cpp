@@ -260,7 +260,7 @@ HttpConn::HttpCode_ HttpConn::__ParseHeaders(char *text) {
       }
     }
   } else {
-    LOGINFO("unknown header: %s\n", text);
+    LOGINFO("unknown header: %s", text);
   }
   return NO_REQUEST;
 }
@@ -283,7 +283,7 @@ HttpConn::HttpCode_ HttpConn::__ProcessRead() {
          ((line_status = __ParseLine()) == LINE_OK)) {
     text = __GetLine();
     __start_line_ = __cur_idx_;
-    LOGINFO("got 1 http line: %s\n", text);
+    LOGINFO("got 1 http line: %s", text);
     switch (__check_state_) {
       case CHECK_STATE_REQUESTLINE:
         ret = __ParseRequestLine(text);
